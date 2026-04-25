@@ -57,7 +57,7 @@ where `n` is the total number of cells across all batches.
 
 ### Within-Batch Graph
 
-For each batch, SCALP-lite builds a symmetric k-nearest-neighbor graph. These blocks preserve local biological structure inside a batch. By default, nearest-neighbor search uses hubness-corrected distances rather than raw Euclidean distances.
+For each batch, SCALP-lite builds a symmetric k-nearest-neighbor graph. These blocks preserve local biological structure inside a batch. By default, nearest-neighbor search uses hubness-corrected distances rather than raw Euclidean distances, and within-batch edges are retained only when the neighbor relation is mutual.
 
 ### Hubness Correction
 
@@ -112,6 +112,41 @@ k_{\mathrm{intra}} =
 k_{\mathrm{total}} \cdot \rho_{\mathrm{intra}}
 \right\rceil
 $$
+
+Rather than selecting neighbors directly by corrected distance, SCALP-lite defaults to rank-based neighbor selection. For each cell, corrected distances are converted into row-wise ranks:
+
+$$
+R_{uv} =
+\operatorname{rank}_{z}
+\left(D_{uz}^{\mathrm{CSLS}}\right)(v)
+$$
+
+The neighbor score is the reciprocal rank sum:
+
+$$
+S_{uv} = R_{uv} + R_{vu}
+$$
+
+The directed neighbor proposal is then:
+
+
+$$
+u \rightarrow v
+\quad \Longleftrightarrow \quad
+v \in N_{k_{\mathrm{intra}}}^{S}(u)
+$$
+
+With mutual-neighbor filtering enabled, the retained within-batch edge set is:
+
+$$
+(u, v) \in E_{\mathrm{intra}}
+\quad \Longleftrightarrow \quad
+u \in N_{k_{\mathrm{intra}}}(v)
+\ \mathrm{and}\
+v \in N_{k_{\mathrm{intra}}}(u)
+$$
+
+Mutual neighbors reduce one-sided high-dimensional nearest-neighbor artifacts and are therefore the default.
 
 ### Cross-Batch Graph
 
@@ -171,6 +206,8 @@ function BUILD_SCALP_GRAPH(
     hubness_correction = "csls",
     hubness_k = 10,
     edge_weighting = "binary",
+    mutual_neighbors = true,
+    neighbor_mode = "rank",
     symmetrize = true
 ):
     validate adata has batch_key and rep_key
@@ -189,7 +226,9 @@ function BUILD_SCALP_GRAPH(
             metric = metric,
             hubness_correction = hubness_correction,
             hubness_k = hubness_k,
-            edge_weighting = edge_weighting
+            edge_weighting = edge_weighting,
+            mutual_neighbors = mutual_neighbors,
+            neighbor_mode = neighbor_mode
         )
 
     for each pair of batches i < j:
@@ -228,7 +267,16 @@ function CSLS_DISTANCES(D, hubness_k, exclude_self = false):
 ```
 
 ```text
-function BUILD_INTRA_BATCH_GRAPH(X, n_neighbors, metric, hubness_correction, hubness_k, edge_weighting):
+function BUILD_INTRA_BATCH_GRAPH(
+    X,
+    n_neighbors,
+    metric,
+    hubness_correction,
+    hubness_k,
+    edge_weighting,
+    mutual_neighbors,
+    neighbor_mode
+):
     if X has zero or one cell:
         return empty sparse graph
 
@@ -238,7 +286,12 @@ function BUILD_INTRA_BATCH_GRAPH(X, n_neighbors, metric, hubness_correction, hub
     if hubness_correction == "csls":
         distances = CSLS_DISTANCES(distances, hubness_k, exclude_self = true)
 
-    neighbors = rowwise_k_smallest_non_self(distances, k - 1)
+    if neighbor_mode == "rank":
+        scores = reciprocal_rank_scores(distances)
+    else:
+        scores = distances
+
+    neighbors = rowwise_k_smallest_non_self(scores, k - 1)
 
     for each cell:
         add edges to its corrected nearest non-self neighbors
@@ -247,7 +300,10 @@ function BUILD_INTRA_BATCH_GRAPH(X, n_neighbors, metric, hubness_correction, hub
         else:
             weight each edge as 1 / (1 + shifted_corrected_distance)
 
-    symmetrize graph with elementwise maximum
+    if mutual_neighbors:
+        keep only reciprocal directed edges
+    else:
+        symmetrize graph with elementwise maximum
     remove diagonal entries
     return graph
 ```
@@ -300,6 +356,8 @@ function BUILD_INTER_BATCH_GRAPH(
 - `hubness_correction`: distance correction applied before neighbor selection and assignment. Options: `csls`, `none`. Default: `csls`.
 - `hubness_k`: local neighborhood size used by CSLS. Default: `10`.
 - `edge_weighting`: how retained graph edges are weighted. Options: `binary`, `distance`. Notebook default: `binary`; library default: `distance`.
+- `mutual_neighbors`: whether within-batch kNN edges must be reciprocal. Default: `true`.
+- `neighbor_mode`: score used for within-batch kNN selection. Options: `rank`, `distance`. Default: `rank`.
 - `symmetrize`: whether to make the assembled graph symmetric. Default: `true`.
 
 ## Expected Behavior
@@ -349,6 +407,8 @@ plot by batch and label
 score embedding quality
 save embedded .h5ad
 ```
+
+For paired batch/label plots, cells are drawn in a reproducible random order while keeping coordinates and labels synchronized. This avoids a misleading overlay when the AnnData rows are ordered by batch or cell type and many points occupy a crowded region.
 
 The object-oriented entry point for this workflow is `ScalpEstimator`. Its `preprocess()` method uses Scanpy's `normalize_total`, `log1p`, `filter_genes`, and `highly_variable_genes` when Scanpy is installed, matching the standard preprocessing pattern used in the original `cellsaw` codebase. A variance-based selector is kept as a lightweight fallback.
 

@@ -18,6 +18,30 @@ def test_intra_batch_graph_has_expected_shape_and_no_cross_batch_edges():
     assert graph.nnz > 0
 
 
+def test_intra_batch_graph_uses_mutual_neighbors_by_default():
+    X = np.array([[0.0], [1.0], [3.0]])
+
+    mutual = build_intra_batch_graph(X, n_neighbors=1, hubness_correction="none")
+    non_mutual = build_intra_batch_graph(X, n_neighbors=1, hubness_correction="none", mutual_neighbors=False)
+
+    assert mutual[0, 1] > 0
+    assert mutual[1, 0] > 0
+    assert mutual[1, 2] == 0
+    assert mutual[2, 1] == 0
+    assert non_mutual[1, 2] > 0
+    assert non_mutual[2, 1] > 0
+
+
+def test_intra_batch_graph_accepts_rank_neighbor_mode():
+    X = np.random.default_rng(4).normal(size=(12, 5))
+
+    graph = build_intra_batch_graph(X, n_neighbors=3, neighbor_mode="rank")
+
+    assert graph.shape == (12, 12)
+    assert sparse.isspmatrix_csr(graph)
+    assert graph.nnz > 0
+
+
 def test_hungarian_inter_batch_graph_creates_cross_batch_edges():
     rng = np.random.default_rng(1)
     left = rng.normal(size=(8, 3))

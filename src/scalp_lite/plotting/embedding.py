@@ -7,7 +7,13 @@ import pandas as pd
 import seaborn as sns
 
 
-def _embedding_frame(adata: ad.AnnData, *, embedding_key: str, color_key: str) -> pd.DataFrame:
+def _embedding_frame(
+    adata: ad.AnnData,
+    *,
+    embedding_key: str,
+    color_key: str,
+    order: np.ndarray | None = None,
+) -> pd.DataFrame:
     if embedding_key not in adata.obsm:
         raise KeyError(f"Missing embedding in obsm: {embedding_key!r}")
     if color_key not in adata.obs:
@@ -17,7 +23,24 @@ def _embedding_frame(adata: ad.AnnData, *, embedding_key: str, color_key: str) -
     if X.shape[1] < 2:
         raise ValueError("Embedding must have at least two dimensions.")
 
-    return pd.DataFrame({"x": X[:, 0], "y": X[:, 1], color_key: adata.obs[color_key].astype(str).to_numpy()})
+    if order is None:
+        order = np.arange(adata.n_obs)
+
+    return pd.DataFrame(
+        {
+            "x": X[order, 0],
+            "y": X[order, 1],
+            color_key: adata.obs[color_key].astype(str).to_numpy()[order],
+        }
+    )
+
+
+def _plot_order(n_obs: int, *, shuffle: bool, random_state: int | None) -> np.ndarray:
+    order = np.arange(n_obs)
+    if shuffle:
+        rng = np.random.default_rng(random_state)
+        rng.shuffle(order)
+    return order
 
 
 def _plot_embedding_on_axis(
@@ -31,8 +54,9 @@ def _plot_embedding_on_axis(
     alpha: float,
     legend: bool | str,
     palette=None,
+    order: np.ndarray | None = None,
 ):
-    df = _embedding_frame(adata, embedding_key=embedding_key, color_key=color_key)
+    df = _embedding_frame(adata, embedding_key=embedding_key, color_key=color_key, order=order)
     sns.scatterplot(
         data=df,
         x="x",
@@ -63,6 +87,8 @@ def plot_embedding(
     ax=None,
     s: float = 12,
     alpha: float = 0.85,
+    shuffle: bool = True,
+    random_state: int | None = 0,
 ):
     """Plot a 2D embedding stored in `adata.obsm` colored by an obs column."""
     if ax is None:
@@ -77,6 +103,7 @@ def plot_embedding(
         alpha=alpha,
         legend=True,
         palette=None,
+        order=_plot_order(adata.n_obs, shuffle=shuffle, random_state=random_state),
     )
 
 
@@ -92,6 +119,8 @@ def plot_embedding_pair(
     alpha: float = 0.85,
     batch_palette: str | list | dict | None = "viridis",
     label_palette: str | list | dict | None = "tab20",
+    shuffle: bool = True,
+    random_state: int | None = 0,
 ):
     """Plot one embedding twice: colored by batch and by biological label.
 
@@ -105,6 +134,7 @@ def plot_embedding_pair(
     if len(axes) != 2:
         raise ValueError("axes must contain exactly two matplotlib axes.")
 
+    order = _plot_order(adata.n_obs, shuffle=shuffle, random_state=random_state)
     _plot_embedding_on_axis(
         adata,
         embedding_key=embedding_key,
@@ -115,6 +145,7 @@ def plot_embedding_pair(
         alpha=alpha,
         legend=True,
         palette=batch_palette,
+        order=order,
     )
     _plot_embedding_on_axis(
         adata,
@@ -126,5 +157,6 @@ def plot_embedding_pair(
         alpha=alpha,
         legend=True,
         palette=label_palette,
+        order=order,
     )
     return axes

@@ -25,6 +25,8 @@ def build_scalp_graph(
     hubness_correction: str = "csls",
     hubness_k: int = 10,
     edge_weighting: str = "distance",
+    mutual_neighbors: bool = True,
+    neighbor_mode: str = "rank",
     symmetrize: bool = True,
 ) -> sparse.csr_matrix:
     """Build the SCALP-lite integrated graph for an AnnData object."""
@@ -52,6 +54,8 @@ def build_scalp_graph(
             hubness_correction=hubness_correction,
             hubness_k=hubness_k,
             edge_weighting=edge_weighting,
+            mutual_neighbors=mutual_neighbors,
+            neighbor_mode=neighbor_mode,
         )
         blocks[i][i] = block
         intra_edges += block.nnz
@@ -102,6 +106,8 @@ def build_scalp_graph(
             "hubness_correction": hubness_correction,
             "hubness_k": hubness_k,
             "edge_weighting": edge_weighting,
+            "mutual_neighbors": mutual_neighbors,
+            "neighbor_mode": neighbor_mode,
             "symmetrize": symmetrize,
         },
         "edge_counts": {

@@ -86,6 +86,8 @@ class ScalpEstimator:
     hubness_correction: str = "csls"
     hubness_k: int = 10
     edge_weighting: str = "distance"
+    mutual_neighbors: bool = True
+    neighbor_mode: str = "rank"
     symmetrize: bool = True
     n_components: int = 40
     random_state: int = 0
@@ -239,6 +241,8 @@ class ScalpEstimator:
         hubness_correction: str | None = None,
         hubness_k: int | None = None,
         edge_weighting: str | None = None,
+        mutual_neighbors: bool | None = None,
+        neighbor_mode: str | None = None,
         symmetrize: bool | None = None,
     ) -> sparse.csr_matrix:
         """Build and return the SCALP-lite graph for an AnnData object."""
@@ -252,6 +256,8 @@ class ScalpEstimator:
         hubness_correction = self.hubness_correction if hubness_correction is None else hubness_correction
         hubness_k = self.hubness_k if hubness_k is None else hubness_k
         edge_weighting = self.edge_weighting if edge_weighting is None else edge_weighting
+        mutual_neighbors = self.mutual_neighbors if mutual_neighbors is None else mutual_neighbors
+        neighbor_mode = self.neighbor_mode if neighbor_mode is None else neighbor_mode
         symmetrize = self.symmetrize if symmetrize is None else symmetrize
 
         validate_adata(adata, batch_key=batch_key, rep_key=rep_key, require_rep=True)
@@ -267,6 +273,8 @@ class ScalpEstimator:
             hubness_correction=hubness_correction,
             hubness_k=hubness_k,
             edge_weighting=edge_weighting,
+            mutual_neighbors=mutual_neighbors,
+            neighbor_mode=neighbor_mode,
             symmetrize=symmetrize,
         )
 
@@ -305,6 +313,8 @@ class ScalpEstimator:
         hubness_correction: str | None = None,
         hubness_k: int | None = None,
         edge_weighting: str | None = None,
+        mutual_neighbors: bool | None = None,
+        neighbor_mode: str | None = None,
         symmetrize: bool | None = None,
         embedding_method: str | None = None,
         embedding_components: int | None = None,
@@ -324,6 +334,8 @@ class ScalpEstimator:
             hubness_correction=hubness_correction,
             hubness_k=hubness_k,
             edge_weighting=edge_weighting,
+            mutual_neighbors=mutual_neighbors,
+            neighbor_mode=neighbor_mode,
             symmetrize=symmetrize,
         )
         return self.graph_to_vector(

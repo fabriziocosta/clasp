@@ -192,6 +192,8 @@ def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
         hubness_correction="none",
         hubness_k=3,
         edge_weighting="binary",
+        mutual_neighbors=False,
+        neighbor_mode="distance",
         symmetrize=False,
     )
 
@@ -204,6 +206,8 @@ def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
     assert params["hubness_correction"] == "none"
     assert params["hubness_k"] == 3
     assert params["edge_weighting"] == "binary"
+    assert params["mutual_neighbors"] is False
+    assert params["neighbor_mode"] == "distance"
     assert params["symmetrize"] is False
 
 
@@ -228,6 +232,8 @@ def test_estimator_embed_accepts_graph_overrides(toy_adata):
         hubness_correction="none",
         hubness_k=3,
         edge_weighting="binary",
+        mutual_neighbors=False,
+        neighbor_mode="distance",
         embedding_method="spectral",
         embedding_components=3,
     )
@@ -236,6 +242,8 @@ def test_estimator_embed_accepts_graph_overrides(toy_adata):
     assert adata.uns["scalp_lite"]["graph"]["parameters"]["n_neighbors"] == 4
     assert adata.uns["scalp_lite"]["graph"]["parameters"]["hubness_correction"] == "none"
     assert adata.uns["scalp_lite"]["graph"]["parameters"]["edge_weighting"] == "binary"
+    assert adata.uns["scalp_lite"]["graph"]["parameters"]["mutual_neighbors"] is False
+    assert adata.uns["scalp_lite"]["graph"]["parameters"]["neighbor_mode"] == "distance"
 
 
 def test_estimator_plot_wraps_embedding_pair(toy_adata):

@@ -77,6 +77,10 @@ graph = estimator.data_to_graph(
     hubness_k=10,
     # Use binary for paper-compatible graph connectivity, or distance for weighted edges.
     edge_weighting="binary",
+    # Retain within-batch kNN edges only when the neighbor relation is reciprocal.
+    mutual_neighbors=True,
+    # Use reciprocal rank scores, rather than raw distances, for within-batch kNN selection.
+    neighbor_mode="rank",
     # Symmetrize the final graph.
     symmetrize=True,
 )
@@ -87,7 +91,7 @@ estimator.plot(adata, embedding_key="X_scalp")
 estimator.save(adata, "scalp_lite_embedded.h5ad")
 ```
 
-`estimator.plot` uses a viridis palette for batches and a categorical `tab20` palette for labels by default.
+`estimator.plot` uses a viridis palette for batches and a categorical `tab20` palette for labels by default. It shuffles the draw order reproducibly so ordered labels or batches do not hide mixing in crowded regions.
 
 `ScalpEstimator.preprocess` follows the standard single-cell preprocessing pattern used by the original project: optionally filter cells and genes, normalize each cell to `target_sum`, optionally apply `log1p`, select highly variable genes with `scanpy.pp.highly_variable_genes`, and compute PCA.
 
