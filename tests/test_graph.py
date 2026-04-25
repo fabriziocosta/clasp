@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 import numpy as np
+import pytest
 from anndata import AnnData
 from scipy import sparse
 
-from scalp_lite.graph import build_inter_batch_graph, build_intra_batch_graph, build_scalp_graph
+from scalp_lite.graph import GraphParams, build_inter_batch_graph, build_intra_batch_graph, build_scalp_graph
 from scalp_lite.graph.hubness import csls_distances, edge_weights
 from scalp_lite.preprocessing import ensure_pca
 
@@ -39,6 +40,33 @@ def test_intra_batch_graph_accepts_rank_neighbor_mode():
 
     assert graph.shape == (12, 12)
     assert sparse.isspmatrix_csr(graph)
+    assert graph.nnz > 0
+
+
+def test_graph_params_validate_and_coerce_integral_values():
+    params = GraphParams(n_neighbors=5.0, n_inter_edges=2.0, hubness_k=3.0)
+
+    assert params.n_neighbors == 5
+    assert isinstance(params.n_neighbors, int)
+    assert params.n_inter_edges == 2
+    assert isinstance(params.n_inter_edges, int)
+    assert params.hubness_k == 3
+    assert isinstance(params.hubness_k, int)
+
+
+def test_graph_params_reject_non_integral_edge_counts():
+    with pytest.raises(ValueError, match="n_inter_edges must be an integer"):
+        GraphParams(n_inter_edges=2.5)
+
+
+def test_inter_batch_graph_coerces_integral_float_edge_count():
+    rng = np.random.default_rng(5)
+    left = rng.normal(size=(5, 3))
+    right = rng.normal(size=(6, 3))
+
+    graph = build_inter_batch_graph(left, right, n_inter_edges=2.0, assignment_quantile=1.0)
+
+    assert graph.shape == (5, 6)
     assert graph.nnz > 0
 
 

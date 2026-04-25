@@ -6,6 +6,7 @@ from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
 
 from scalp_lite.graph.hubness import csls_distances, edge_weights
+from scalp_lite.graph.params import _coerce_int
 
 
 def _iterated_assignment(distances: np.ndarray, n_repeats: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -46,6 +47,8 @@ def build_inter_batch_graph(
     edge_weighting: str = "distance",
 ) -> sparse.csr_matrix:
     """Build a sparse cross-batch graph using repeated Hungarian assignment."""
+    n_inter_edges = _coerce_int(n_inter_edges, name="n_inter_edges", minimum=0)
+    hubness_k = _coerce_int(hubness_k, name="hubness_k", minimum=1)
     shape = (X_left.shape[0], X_right.shape[0])
     if shape[0] == 0 or shape[1] == 0 or n_inter_edges <= 0:
         return sparse.csr_matrix(shape, dtype=np.float32)

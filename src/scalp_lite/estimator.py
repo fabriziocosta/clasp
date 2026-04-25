@@ -10,7 +10,7 @@ import pandas as pd
 from scipy import sparse
 
 from scalp_lite.embedding import embed_graph
-from scalp_lite.graph import build_scalp_graph
+from scalp_lite.graph import GraphParams, build_scalp_graph
 from scalp_lite.io import read_h5ad, save_h5ad, validate_adata
 from scalp_lite.plotting import plot_embedding_pair
 from scalp_lite.preprocessing import ensure_pca
@@ -119,6 +119,7 @@ class ScalpEstimator:
         log1p: bool = True,
         hvg_flavor: str = "cell_ranger",
         hvg_batch_key: str | None = None,
+        hvg_fallback: str = "variance",
         create_artificial_batch: bool = False,
         artificial_batch_count: int = 3,
         label_candidates: tuple[str, ...] = (
@@ -138,8 +139,11 @@ class ScalpEstimator:
         cell and gene filtering, expression normalization, HVG selection,
         optional cell subsampling, copying behavior, and PCA creation.
         `label_candidates` is tried in order when `obs[self.label_key]` is
-        absent.
+        absent. `hvg_fallback` controls Scanpy HVG failures and can be
+        "variance" or "error".
         """
+        if hvg_fallback not in {"variance", "error"}:
+            raise ValueError("hvg_fallback must be one of: 'variance', 'error'.")
         result = adata.copy() if copy else adata
         sc = _optional_scanpy()
         changed_expression = False
@@ -185,6 +189,7 @@ class ScalpEstimator:
         if n_top_genes is not None and result.n_vars > n_top_genes:
             if n_top_genes < 1:
                 raise ValueError("n_top_genes must be >= 1 or None.")
+            hvg_failed = False
             if sc is not None and hvg_flavor != "variance":
                 try:
                     with warnings.catch_warnings():
@@ -201,9 +206,26 @@ class ScalpEstimator:
                     score_column = "dispersions_norm" if "dispersions_norm" in hvg else "variances_norm"
                     scores = hvg[score_column].fillna(0).to_numpy() if score_column in hvg else np.zeros(result.n_vars)
                     result.var["scalp_lite_hvg_score"] = scores
-                except Exception:
+                except Exception as exc:
+                    if hvg_fallback == "error":
+                        raise
+                    warnings.warn(
+                        "Scanpy highly_variable_genes failed; falling back to variance-based gene selection. "
+                        f"Original error: {exc}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
                     selected = np.zeros(result.n_vars, dtype=bool)
+                    hvg_failed = True
             if sc is None or hvg_flavor == "variance" or not np.any(selected):
+                if sc is not None and hvg_flavor != "variance" and hvg_fallback == "error":
+                    raise RuntimeError("Scanpy highly_variable_genes did not select any genes.")
+                if sc is not None and hvg_flavor != "variance" and not np.any(selected) and not hvg_failed:
+                    warnings.warn(
+                        "Scanpy highly_variable_genes selected no genes; falling back to variance-based gene selection.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
                 variances = _matrix_variance(result.X)
                 selected = np.zeros(result.n_vars, dtype=bool)
                 selected[np.argsort(variances)[::-1][:n_top_genes]] = True
@@ -260,11 +282,7 @@ class ScalpEstimator:
         neighbor_mode = self.neighbor_mode if neighbor_mode is None else neighbor_mode
         symmetrize = self.symmetrize if symmetrize is None else symmetrize
 
-        validate_adata(adata, batch_key=batch_key, rep_key=rep_key, require_rep=True)
-        return build_scalp_graph(
-            adata,
-            rep_key=rep_key,
-            batch_key=batch_key,
+        params = GraphParams(
             n_neighbors=n_neighbors,
             intra_fraction=intra_fraction,
             n_inter_edges=n_inter_edges,
@@ -276,6 +294,24 @@ class ScalpEstimator:
             mutual_neighbors=mutual_neighbors,
             neighbor_mode=neighbor_mode,
             symmetrize=symmetrize,
+        )
+
+        validate_adata(adata, batch_key=batch_key, rep_key=rep_key, require_rep=True)
+        return build_scalp_graph(
+            adata,
+            rep_key=rep_key,
+            batch_key=batch_key,
+            n_neighbors=params.n_neighbors,
+            intra_fraction=params.intra_fraction,
+            n_inter_edges=params.n_inter_edges,
+            metric=params.metric,
+            assignment_quantile=params.assignment_quantile,
+            hubness_correction=params.hubness_correction,
+            hubness_k=params.hubness_k,
+            edge_weighting=params.edge_weighting,
+            mutual_neighbors=params.mutual_neighbors,
+            neighbor_mode=params.neighbor_mode,
+            symmetrize=params.symmetrize,
         )
 
     def graph_to_vector(

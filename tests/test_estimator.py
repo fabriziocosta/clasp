@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 import matplotlib
+import pytest
 from scipy import sparse
 
 from scalp_lite import ScalpEstimator
@@ -126,6 +127,36 @@ def test_estimator_preprocess_accepts_variance_hvg_flavor(toy_adata):
 
     assert adata.n_vars == 5
     assert "scalp_lite_hvg_score" in adata.var
+
+
+def test_estimator_preprocess_warns_when_scanpy_hvg_falls_back(toy_adata):
+    estimator = ScalpEstimator(n_components=4)
+
+    with pytest.warns(RuntimeWarning, match="falling back to variance-based gene selection"):
+        adata = estimator.preprocess(
+            toy_adata,
+            n_top_genes=5,
+            min_gene_counts=0,
+            normalize=False,
+            hvg_flavor="not_a_real_flavor",
+            hvg_fallback="variance",
+        )
+
+    assert adata.n_vars == 5
+
+
+def test_estimator_preprocess_can_error_on_scanpy_hvg_failure(toy_adata):
+    estimator = ScalpEstimator(n_components=4)
+
+    with pytest.raises(Exception):
+        estimator.preprocess(
+            toy_adata,
+            n_top_genes=5,
+            min_gene_counts=0,
+            normalize=False,
+            hvg_flavor="not_a_real_flavor",
+            hvg_fallback="error",
+        )
 
 
 def test_estimator_preprocess_can_create_artificial_batches():
