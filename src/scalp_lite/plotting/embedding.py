@@ -55,6 +55,7 @@ def _plot_embedding_on_axis(
     legend: bool | str,
     palette=None,
     order: np.ndarray | None = None,
+    legend_markerscale: float = 2.5,
 ):
     df = _embedding_frame(adata, embedding_key=embedding_key, color_key=color_key, order=order)
     sns.scatterplot(
@@ -75,7 +76,14 @@ def _plot_embedding_on_axis(
     ax.set_xticks([])
     ax.set_yticks([])
     if legend:
-        ax.legend(loc="center left", bbox_to_anchor=(1, 0.5), frameon=False, title=color_key)
+        ax.legend(
+            loc="center left",
+            bbox_to_anchor=(1, 0.5),
+            frameon=False,
+            title=color_key,
+            markerscale=legend_markerscale,
+            scatterpoints=1,
+        )
     return ax
 
 
@@ -89,6 +97,7 @@ def plot_embedding(
     alpha: float = 0.85,
     shuffle: bool = True,
     random_state: int | None = 0,
+    legend_markerscale: float = 2.5,
 ):
     """Plot a 2D embedding stored in `adata.obsm` colored by an obs column."""
     if ax is None:
@@ -104,6 +113,7 @@ def plot_embedding(
         legend=True,
         palette=None,
         order=_plot_order(adata.n_obs, shuffle=shuffle, random_state=random_state),
+        legend_markerscale=legend_markerscale,
     )
 
 
@@ -121,6 +131,7 @@ def plot_embedding_pair(
     label_palette: str | list | dict | None = "tab20",
     shuffle: bool = True,
     random_state: int | None = 0,
+    legend_markerscale: float = 2.5,
 ):
     """Plot one embedding twice: colored by batch and by biological label.
 
@@ -146,6 +157,7 @@ def plot_embedding_pair(
         legend=True,
         palette=batch_palette,
         order=order,
+        legend_markerscale=legend_markerscale,
     )
     _plot_embedding_on_axis(
         adata,
@@ -158,5 +170,6 @@ def plot_embedding_pair(
         legend=True,
         palette=label_palette,
         order=order,
+        legend_markerscale=legend_markerscale,
     )
     return axes

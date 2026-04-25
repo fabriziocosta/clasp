@@ -54,6 +54,22 @@ def test_plot_embedding_pair_shuffles_draw_order_in_sync(toy_adata):
     plt.close(axes[0].figure)
 
 
+def test_plot_embedding_pair_uses_larger_legend_markers(toy_adata):
+    toy_adata.obsm["X_scalp"] = toy_adata.X[:, :2]
+
+    axes = plot_embedding_pair(
+        toy_adata,
+        embedding_key="X_scalp",
+        batch_key="batch",
+        label_key="label",
+        legend_markerscale=3.0,
+    )
+
+    assert axes[0].get_legend().markerscale == 3.0
+    assert axes[1].get_legend().markerscale == 3.0
+    plt.close(axes[0].figure)
+
+
 def test_plot_embedding_pair_rejects_missing_label(toy_adata):
     toy_adata.obsm["X_scalp"] = toy_adata.X[:, :2]
 
