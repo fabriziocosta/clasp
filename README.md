@@ -22,7 +22,7 @@ from scalp_lite import (
     build_scalp_graph,
     embed_graph,
     score_embedding,
-    plot_embedding,
+    plot_embedding_pair,
 )
 
 adata = read_h5ad("input.h5ad")
@@ -41,8 +41,7 @@ graph = build_scalp_graph(
 adata.obsm["X_scalp"] = embed_graph(graph, method="auto")
 scores = score_embedding(adata, embedding_key="X_scalp", batch_key="batch", label_key="label", graph=graph)
 
-plot_embedding(adata, embedding_key="X_scalp", color_key="batch")
-plot_embedding(adata, embedding_key="X_scalp", color_key="label")
+plot_embedding_pair(adata, embedding_key="X_scalp", batch_key="batch", label_key="label")
 ```
 
 ## AnnData Schema
