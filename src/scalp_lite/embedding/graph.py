@@ -67,9 +67,12 @@ def embed_graph(
             raise ImportError("UMAP embedding requires optional dependency `umap-learn`.") from exc
         distances = graph.copy().astype(float)
         distances.data = 1.0 / np.maximum(distances.data, 1e-12) - 1.0
-        dense = distances.toarray()
-        max_dist = np.nanmax(dense[np.isfinite(dense)]) if dense.size else 1.0
-        dense[dense == 0] = max_dist * 2
+        edge_distances = distances.data[np.isfinite(distances.data)]
+        max_dist = float(np.nanmax(edge_distances)) if edge_distances.size else 1.0
+        non_edge_distance = max(max_dist * 2, 1.0)
+        dense = np.full(distances.shape, non_edge_distance, dtype=float)
+        coo = distances.tocoo()
+        dense[coo.row, coo.col] = coo.data
         np.fill_diagonal(dense, 0)
         with _suppress_known_umap_noise():
             return umap.UMAP(

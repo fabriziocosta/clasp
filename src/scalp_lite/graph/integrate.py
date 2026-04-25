@@ -67,6 +67,11 @@ def build_scalp_graph(
         graph.setdiag(0)
         graph.eliminate_zeros()
 
+    grouped_order = np.concatenate([split.indices for split in splits])
+    original_order = np.empty_like(grouped_order)
+    original_order[grouped_order] = np.arange(len(grouped_order))
+    graph = graph[original_order][:, original_order].tocsr()
+
     adata.uns.setdefault("scalp_lite", {})
     adata.uns["scalp_lite"]["graph"] = {
         "batch_key": batch_key,
@@ -74,6 +79,7 @@ def build_scalp_graph(
         "batch_order": [str(split.batch) for split in splits],
         "offsets": [int(split.offset) for split in splits],
         "sizes": [int(len(split.indices)) for split in splits],
+        "grouped_order": [int(index) for index in grouped_order],
         "parameters": {
             "n_neighbors": n_neighbors,
             "intra_fraction": intra_fraction,

@@ -3,7 +3,9 @@ from __future__ import annotations
 import builtins
 import warnings
 
+import numpy as np
 import pytest
+from scipy import sparse
 
 from scalp_lite.embedding import embed_graph
 from scalp_lite.graph import build_scalp_graph
@@ -62,3 +64,23 @@ def test_umap_embedding_suppresses_expected_noise(capsys, toy_adata):
     assert "using precomputed metric" not in messages
     assert "n_jobs value" not in messages
     assert "omp_set_nested" not in captured.err
+
+
+def test_umap_embedding_handles_zero_distance_edges():
+    pytest.importorskip("umap")
+    graph = sparse.csr_matrix(
+        np.array(
+            [
+                [0.0, 1.0, 0.5, 0.0, 0.0],
+                [1.0, 0.0, 0.5, 0.0, 0.0],
+                [0.5, 0.5, 0.0, 0.5, 0.5],
+                [0.0, 0.0, 0.5, 0.0, 1.0],
+                [0.0, 0.0, 0.5, 1.0, 0.0],
+            ]
+        )
+    )
+
+    coords = embed_graph(graph, method="umap", n_components=2, n_epochs=10, n_neighbors=2)
+
+    assert coords.shape == (5, 2)
+    assert np.isfinite(coords).all()

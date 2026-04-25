@@ -6,11 +6,13 @@ import warnings
 
 import anndata as ad
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
 from scalp_lite.embedding import embed_graph
 from scalp_lite.graph import build_scalp_graph
-from scalp_lite.io import read_h5ad, validate_adata
+from scalp_lite.io import read_h5ad, save_h5ad, validate_adata
+from scalp_lite.plotting import plot_embedding_pair
 from scalp_lite.preprocessing import ensure_pca
 
 
@@ -87,9 +89,17 @@ class ScalpEstimator:
     embedding_method: str = "auto"
     embedding_components: int = 2
 
-    def input(self, path: str | Path) -> ad.AnnData:
+    def to_data(self, path: str | Path) -> ad.AnnData:
         """Read an `.h5ad` file and return an AnnData object."""
         return read_h5ad(path)
+
+    def input(self, path: str | Path) -> ad.AnnData:
+        """Alias for `to_data`."""
+        return self.to_data(path)
+
+    def save(self, adata: ad.AnnData, path: str | Path, *, compression: str | None = "gzip") -> None:
+        """Write an AnnData object to an `.h5ad` file."""
+        save_h5ad(adata, path, compression=compression)
 
     def preprocess(
         self,
@@ -97,15 +107,57 @@ class ScalpEstimator:
         *,
         n_top_genes: int | None = 2000,
         max_cells: int | None = None,
+        min_cell_genes: int | None = None,
         min_gene_counts: int = 3,
         normalize: bool | str = "auto",
+        target_sum: float = 1e4,
+        log1p: bool = True,
         hvg_flavor: str = "cell_ranger",
+        hvg_batch_key: str | None = None,
+        create_artificial_batch: bool = False,
+        artificial_batch_count: int = 3,
+        label_candidates: tuple[str, ...] = (
+            "clusters_coarse",
+            "cell_type",
+            "lineages",
+            "clusters_fine",
+            "clusters",
+            "leiden",
+            "louvain",
+        ),
         copy: bool = True,
     ) -> ad.AnnData:
-        """Normalize expression, select variable genes, optionally subsample cells, and ensure PCA exists."""
+        """Prepare AnnData for graph construction.
+
+        Parameters control, in order: optional artificial batch/label setup,
+        cell and gene filtering, expression normalization, HVG selection,
+        optional cell subsampling, copying behavior, and PCA creation.
+        `label_candidates` is tried in order when `obs[self.label_key]` is
+        absent.
+        """
         result = adata.copy() if copy else adata
         sc = _optional_scanpy()
         changed_expression = False
+
+        if self.batch_key not in result.obs and create_artificial_batch:
+            if artificial_batch_count < 1:
+                raise ValueError("artificial_batch_count must be >= 1.")
+            result.obs[self.batch_key] = pd.Categorical(
+                [f"split_{i % artificial_batch_count}" for i in range(result.n_obs)]
+            )
+
+        if self.label_key not in result.obs:
+            for candidate in label_candidates:
+                if candidate in result.obs:
+                    result.obs[self.label_key] = result.obs[candidate].astype("category")
+                    break
+
+        if min_cell_genes is not None and min_cell_genes > 0:
+            if sc is None:
+                raise ImportError("Cell filtering requires optional dependency `scanpy`.")
+            cell_mask, _ = sc.pp.filter_cells(result, min_genes=min_cell_genes, inplace=False)
+            if not np.all(cell_mask):
+                result = result[cell_mask].copy()
 
         if min_gene_counts > 0 and sc is not None and result.n_vars > 0:
             gene_mask, _ = sc.pp.filter_genes(result, min_counts=min_gene_counts, inplace=False)
@@ -119,15 +171,16 @@ class ScalpEstimator:
         if should_normalize:
             if sc is None:
                 raise ImportError("Expression normalization requires optional dependency `scanpy`.")
-            sc.pp.normalize_total(result, target_sum=1e4)
-            sc.pp.log1p(result)
+            sc.pp.normalize_total(result, target_sum=target_sum)
+            if log1p:
+                sc.pp.log1p(result)
             result.uns["normlog"] = True
             changed_expression = True
 
         if n_top_genes is not None and result.n_vars > n_top_genes:
             if n_top_genes < 1:
                 raise ValueError("n_top_genes must be >= 1 or None.")
-            if sc is not None:
+            if sc is not None and hvg_flavor != "variance":
                 try:
                     with warnings.catch_warnings():
                         warnings.filterwarnings("ignore", message="`n_top_genes` > number of normalized dispersions.*")
@@ -136,6 +189,7 @@ class ScalpEstimator:
                             result,
                             n_top_genes=n_top_genes,
                             flavor=hvg_flavor,
+                            batch_key=hvg_batch_key,
                             inplace=False,
                         )
                     selected = np.asarray(hvg["highly_variable"], dtype=bool)
@@ -144,7 +198,7 @@ class ScalpEstimator:
                     result.var["scalp_lite_hvg_score"] = scores
                 except Exception:
                     selected = np.zeros(result.n_vars, dtype=bool)
-            if sc is None or not np.any(selected):
+            if sc is None or hvg_flavor == "variance" or not np.any(selected):
                 variances = _matrix_variance(result.X)
                 selected = np.zeros(result.n_vars, dtype=bool)
                 selected[np.argsort(variances)[::-1][:n_top_genes]] = True
@@ -204,13 +258,25 @@ class ScalpEstimator:
             symmetrize=symmetrize,
         )
 
-    def graph_to_vector(self, graph: sparse.spmatrix) -> np.ndarray:
+    def graph_to_vector(
+        self,
+        graph: sparse.spmatrix,
+        *,
+        method: str | None = None,
+        n_components: int | None = None,
+        random_state: int | None = None,
+        **kwargs,
+    ) -> np.ndarray:
         """Embed a graph and return low-dimensional vectors."""
+        method = self.embedding_method if method is None else method
+        n_components = self.embedding_components if n_components is None else n_components
+        random_state = self.random_state if random_state is None else random_state
         return embed_graph(
             graph,
-            method=self.embedding_method,
-            n_components=self.embedding_components,
-            random_state=self.random_state,
+            method=method,
+            n_components=n_components,
+            random_state=random_state,
+            **kwargs,
         )
 
     def embed(
@@ -225,6 +291,10 @@ class ScalpEstimator:
         metric: str | None = None,
         assignment_quantile: float | None = None,
         symmetrize: bool | None = None,
+        embedding_method: str | None = None,
+        embedding_components: int | None = None,
+        embedding_random_state: int | None = None,
+        **embedding_kwargs,
     ) -> np.ndarray:
         """Build the graph from AnnData and return embedding vectors."""
         graph = self.data_to_graph(
@@ -238,4 +308,28 @@ class ScalpEstimator:
             assignment_quantile=assignment_quantile,
             symmetrize=symmetrize,
         )
-        return self.graph_to_vector(graph)
+        return self.graph_to_vector(
+            graph,
+            method=embedding_method,
+            n_components=embedding_components,
+            random_state=embedding_random_state,
+            **embedding_kwargs,
+        )
+
+    def plot(
+        self,
+        adata: ad.AnnData,
+        *,
+        embedding_key: str = "X_scalp",
+        batch_key: str | None = None,
+        label_key: str | None = None,
+        **kwargs,
+    ):
+        """Plot the paired batch/label embedding view."""
+        return plot_embedding_pair(
+            adata,
+            embedding_key=embedding_key,
+            batch_key=self.batch_key if batch_key is None else batch_key,
+            label_key=self.label_key if label_key is None else label_key,
+            **kwargs,
+        )

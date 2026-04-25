@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pandas as pd
 import numpy as np
+from anndata import AnnData
 from scipy import sparse
 
 from scalp_lite.graph import build_inter_batch_graph, build_intra_batch_graph, build_scalp_graph
@@ -33,3 +35,32 @@ def test_final_graph_is_sparse_square_symmetric_and_zero_diagonal(toy_adata):
     assert graph.diagonal().sum() == 0
     assert graph.nnz > 0
     assert "scalp_lite" in toy_adata.uns
+
+
+def test_final_graph_preserves_original_observation_order_for_interleaved_batches():
+    adata = AnnData(
+        np.zeros((4, 2)),
+        obs=pd.DataFrame({"batch": ["a", "b", "a", "b"]}),
+    )
+    adata.obsm["X_pca"] = np.array(
+        [
+            [0.0, 0.0],
+            [10.0, 10.0],
+            [0.1, 0.0],
+            [10.1, 10.0],
+        ]
+    )
+
+    graph = build_scalp_graph(
+        adata,
+        n_neighbors=1,
+        intra_fraction=1.0,
+        n_inter_edges=0,
+    )
+
+    assert graph[0, 2] > 0
+    assert graph[2, 0] > 0
+    assert graph[1, 3] > 0
+    assert graph[3, 1] > 0
+    assert graph[0, 1] == 0
+    assert graph[2, 3] == 0
