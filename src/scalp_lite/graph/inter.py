@@ -5,6 +5,8 @@ from scipy import sparse
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
 
+from scalp_lite.graph.hubness import csls_distances, edge_weights
+
 
 def _iterated_assignment(distances: np.ndarray, n_repeats: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     working = distances.copy()
@@ -39,6 +41,9 @@ def build_inter_batch_graph(
     n_inter_edges: int = 1,
     metric: str = "euclidean",
     assignment_quantile: float | None = 0.95,
+    hubness_correction: str = "csls",
+    hubness_k: int = 10,
+    edge_weighting: str = "distance",
 ) -> sparse.csr_matrix:
     """Build a sparse cross-batch graph using repeated Hungarian assignment."""
     shape = (X_left.shape[0], X_right.shape[0])
@@ -46,6 +51,11 @@ def build_inter_batch_graph(
         return sparse.csr_matrix(shape, dtype=np.float32)
 
     distances = pairwise_distances(X_left, X_right, metric=metric)
+    if hubness_correction == "csls":
+        distances = csls_distances(distances, k=hubness_k)
+    elif hubness_correction != "none":
+        raise ValueError("hubness_correction must be one of: 'none', 'csls'.")
+
     rows, cols, vals = _iterated_assignment(distances, n_inter_edges)
 
     if assignment_quantile is not None and len(vals) > 0:
@@ -55,5 +65,5 @@ def build_inter_batch_graph(
         keep = vals <= cutoff
         rows, cols, vals = rows[keep], cols[keep], vals[keep]
 
-    weights = 1.0 / (1.0 + vals)
-    return sparse.csr_matrix((weights.astype(np.float32), (rows, cols)), shape=shape)
+    weights = edge_weights(vals, edge_weighting=edge_weighting)
+    return sparse.csr_matrix((weights, (rows, cols)), shape=shape)

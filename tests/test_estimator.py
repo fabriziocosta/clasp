@@ -189,6 +189,9 @@ def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
         intra_fraction=0.25,
         n_inter_edges=2,
         assignment_quantile=1.0,
+        hubness_correction="none",
+        hubness_k=3,
+        edge_weighting="binary",
         symmetrize=False,
     )
 
@@ -198,6 +201,9 @@ def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
     assert params["intra_fraction"] == 0.25
     assert params["n_inter_edges"] == 2
     assert params["assignment_quantile"] == 1.0
+    assert params["hubness_correction"] == "none"
+    assert params["hubness_k"] == 3
+    assert params["edge_weighting"] == "binary"
     assert params["symmetrize"] is False
 
 
@@ -219,12 +225,17 @@ def test_estimator_embed_accepts_graph_overrides(toy_adata):
         n_neighbors=4,
         intra_fraction=0.25,
         assignment_quantile=1.0,
+        hubness_correction="none",
+        hubness_k=3,
+        edge_weighting="binary",
         embedding_method="spectral",
         embedding_components=3,
     )
 
     assert coords.shape == (adata.n_obs, 3)
     assert adata.uns["scalp_lite"]["graph"]["parameters"]["n_neighbors"] == 4
+    assert adata.uns["scalp_lite"]["graph"]["parameters"]["hubness_correction"] == "none"
+    assert adata.uns["scalp_lite"]["graph"]["parameters"]["edge_weighting"] == "binary"
 
 
 def test_estimator_plot_wraps_embedding_pair(toy_adata):

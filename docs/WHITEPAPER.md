@@ -41,43 +41,87 @@ SCALP-lite works on `adata.obsm[rep_key]`. If that representation is missing, th
 
 Let there be `m` batches:
 
-```text
-X = {X_1, X_2, ..., X_m}
-```
+$$
+X = \{X_1, X_2, \ldots, X_m\}
+$$
 
 where `X_i` is the matrix of cells in batch `i`, represented in PCA or another shared embedding.
 
 The output is a sparse adjacency matrix:
 
-```text
-G in R^(n x n)
-```
+$$
+G \in \mathbb{R}^{n \times n}
+$$
 
 where `n` is the total number of cells across all batches.
 
 ### Within-Batch Graph
 
-For each batch, SCALP-lite builds a symmetric k-nearest-neighbor graph. These blocks preserve local biological structure inside a batch.
+For each batch, SCALP-lite builds a symmetric k-nearest-neighbor graph. These blocks preserve local biological structure inside a batch. By default, nearest-neighbor search uses hubness-corrected distances rather than raw Euclidean distances.
+
+### Hubness Correction
+
+High-dimensional nearest-neighbor graphs often contain hubs: cells that appear as neighbors of many other cells because of geometry rather than biology. Following the SCALP paper, SCALP-lite uses Cross-domain Similarity Local Scaling (CSLS) to correct pairwise distances before neighbor selection and cross-batch assignment.
+
+For a distance matrix `D` between domains `A` and `B`, define the local scale of a cell as its mean distance to the `k_csls` nearest cells in the opposite domain:
+
+$$
+r_A(i) =
+\frac{1}{k_{\mathrm{csls}}}
+\sum_{y \in N_{k_{\mathrm{csls}}}^{B}(x_i)}
+D_{iy}
+$$
+
+$$
+r_B(j) =
+\frac{1}{k_{\mathrm{csls}}}
+\sum_{x \in N_{k_{\mathrm{csls}}}^{A}(y_j)}
+D_{xj}
+$$
+
+The corrected distance is:
+
+$$
+D_{ij}^{\mathrm{CSLS}} =
+2D_{ij} - r_A(i) - r_B(j)
+$$
+
+For within-batch graphs, the same formula is applied with `A = B`, excluding each cell from its own local neighborhood. For cross-batch graphs, `A` and `B` are the two batches being matched.
 
 Edge weights are converted from distances as:
 
-```text
-weight = 1 / (1 + distance)
-```
+$$
+w_{uv} = \frac{1}{1 + \tilde{D}_{uv}}
+$$
+
+where `tilde D` is the non-negative shifted corrected distance used only for edge weighting. Neighbor selection and assignment use the unshifted corrected distance.
+
+SCALP-lite can also binarize retained edges:
+
+$$
+w_{uv} = 1
+$$
+
+This mirrors the paper's implementation note that boolean graph connectivity can substantially reduce cost with limited impact on quality. The notebook defaults use binary weighting; distance weighting remains available when edge confidence should be preserved for downstream embedding.
 
 The number of within-batch neighbors is controlled by:
 
-```text
-intra_neighbors = ceil(n_neighbors * intra_fraction)
-```
+$$
+k_{\mathrm{intra}} =
+\left\lceil
+k_{\mathrm{total}} \cdot \rho_{\mathrm{intra}}
+\right\rceil
+$$
 
 ### Cross-Batch Graph
 
-For each pair of batches, SCALP-lite computes all pairwise distances and solves a linear assignment problem:
+For each pair of batches, SCALP-lite computes all pairwise distances, applies the configured hubness correction, and solves a linear assignment problem:
 
-```text
-minimize sum distance(left_cell_i, right_cell_assignment_i)
-```
+$$
+\min_{\pi}
+\sum_{i}
+D_{i,\pi(i)}^{\mathrm{CSLS}}
+$$
 
 This creates one-to-one matches between cells from the two batches. If `n_inter_edges > 1`, assignment is repeated after removing previous matches, creating multiple sparse matching layers.
 
@@ -85,22 +129,24 @@ Assignments can be filtered with `assignment_quantile`. For example, `0.95` drop
 
 Surviving assignment edges are weighted as:
 
-```text
-weight = 1 / (1 + assignment_distance)
-```
+$$
+w_{i,\pi(i)} =
+\frac{1}{1 + \tilde{D}_{i,\pi(i)}^{\mathrm{CSLS}}}
+$$
 
 ### Block Assembly
 
 The final graph is assembled as a block matrix:
 
-```text
-G = [
-  G_11  G_12  ...  G_1m
-  G_21  G_22  ...  G_2m
-  ...   ...   ...  ...
-  G_m1  G_m2  ...  G_mm
-]
-```
+$$
+G =
+\begin{bmatrix}
+G_{11} & G_{12} & \cdots & G_{1m} \\
+G_{21} & G_{22} & \cdots & G_{2m} \\
+\vdots & \vdots & \ddots & \vdots \\
+G_{m1} & G_{m2} & \cdots & G_{mm}
+\end{bmatrix}
+$$
 
 where:
 
@@ -122,6 +168,9 @@ function BUILD_SCALP_GRAPH(
     n_inter_edges = 1,
     metric = "euclidean",
     assignment_quantile = 0.95,
+    hubness_correction = "csls",
+    hubness_k = 10,
+    edge_weighting = "binary",
     symmetrize = true
 ):
     validate adata has batch_key and rep_key
@@ -137,7 +186,10 @@ function BUILD_SCALP_GRAPH(
         blocks[i][i] = BUILD_INTRA_BATCH_GRAPH(
             X_batches[i],
             n_neighbors = intra_neighbors,
-            metric = metric
+            metric = metric,
+            hubness_correction = hubness_correction,
+            hubness_k = hubness_k,
+            edge_weighting = edge_weighting
         )
 
     for each pair of batches i < j:
@@ -146,7 +198,10 @@ function BUILD_SCALP_GRAPH(
             X_batches[j],
             n_inter_edges = n_inter_edges,
             metric = metric,
-            assignment_quantile = assignment_quantile
+            assignment_quantile = assignment_quantile,
+            hubness_correction = hubness_correction,
+            hubness_k = hubness_k,
+            edge_weighting = edge_weighting
         )
         blocks[i][j] = cross
         blocks[j][i] = transpose(cross)
@@ -163,16 +218,34 @@ function BUILD_SCALP_GRAPH(
 ```
 
 ```text
-function BUILD_INTRA_BATCH_GRAPH(X, n_neighbors, metric):
+function CSLS_DISTANCES(D, hubness_k, exclude_self = false):
+    if exclude_self:
+        set diagonal of D to infinity
+
+    row_scale = mean k smallest values in each row
+    column_scale = mean k smallest values in each column
+    return 2 * D - row_scale[:, None] - column_scale[None, :]
+```
+
+```text
+function BUILD_INTRA_BATCH_GRAPH(X, n_neighbors, metric, hubness_correction, hubness_k, edge_weighting):
     if X has zero or one cell:
         return empty sparse graph
 
     k = min(n_neighbors + 1, number_of_cells)
-    neighbors, distances = nearest_neighbors(X, k, metric)
+    distances = pairwise_distances(X, X, metric)
+
+    if hubness_correction == "csls":
+        distances = CSLS_DISTANCES(distances, hubness_k, exclude_self = true)
+
+    neighbors = rowwise_k_smallest_non_self(distances, k - 1)
 
     for each cell:
-        add edges to its k - 1 nearest non-self neighbors
-        weight each edge as 1 / (1 + distance)
+        add edges to its corrected nearest non-self neighbors
+        if edge_weighting == "binary":
+            weight each edge as 1
+        else:
+            weight each edge as 1 / (1 + shifted_corrected_distance)
 
     symmetrize graph with elementwise maximum
     remove diagonal entries
@@ -185,12 +258,17 @@ function BUILD_INTER_BATCH_GRAPH(
     X_right,
     n_inter_edges,
     metric,
-    assignment_quantile
+    assignment_quantile,
+    hubness_correction,
+    hubness_k,
+    edge_weighting
 ):
     if either batch is empty or n_inter_edges <= 0:
         return empty sparse graph
 
     D = pairwise_distances(X_left, X_right, metric)
+    if hubness_correction == "csls":
+        D = CSLS_DISTANCES(D, hubness_k)
     assignments = []
 
     repeat n_inter_edges times:
@@ -203,7 +281,10 @@ function BUILD_INTER_BATCH_GRAPH(
         cutoff = quantile(assignment_distances, assignment_quantile)
         keep only assignments with distance <= cutoff
 
-    weight each assignment as 1 / (1 + distance)
+    if edge_weighting == "binary":
+        weight each assignment as 1
+    else:
+        weight each assignment as 1 / (1 + shifted_corrected_distance)
     return sparse bipartite graph from X_left to X_right
 ```
 
@@ -216,6 +297,9 @@ function BUILD_INTER_BATCH_GRAPH(
 - `n_inter_edges`: number of repeated assignment layers per batch pair. Default: `1`.
 - `metric`: distance metric used by nearest-neighbor and assignment steps. Default: `euclidean`.
 - `assignment_quantile`: upper distance quantile retained for cross-batch matches. Default: `0.95`.
+- `hubness_correction`: distance correction applied before neighbor selection and assignment. Options: `csls`, `none`. Default: `csls`.
+- `hubness_k`: local neighborhood size used by CSLS. Default: `10`.
+- `edge_weighting`: how retained graph edges are weighted. Options: `binary`, `distance`. Notebook default: `binary`; library default: `distance`.
 - `symmetrize`: whether to make the assembled graph symmetric. Default: `true`.
 
 ## Expected Behavior
@@ -248,8 +332,8 @@ Current limitations:
 
 - Cross-batch assignment requires pairwise distance matrices for each batch pair.
 - PBMC3k is only a smoke test because artificial batches do not represent real batch effects.
-- The implementation does not yet include hubness correction.
-- The graph currently uses simple inverse-distance weights.
+- CSLS correction currently requires dense pairwise distance matrices.
+- Binary graph weighting is faster and paper-compatible, but it discards edge confidence.
 - Large atlas-scale datasets may need approximate nearest-neighbor search, chunked assignment, or subsampling.
 
 ## Practical Workflow

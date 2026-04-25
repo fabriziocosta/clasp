@@ -71,6 +71,12 @@ graph = estimator.data_to_graph(
     n_inter_edges=1,
     # Keep only cross-batch assignments up to this distance quantile.
     assignment_quantile=0.95,
+    # Apply CSLS hubness correction before kNN and Hungarian assignment.
+    hubness_correction="csls",
+    # Local neighborhood size used by CSLS.
+    hubness_k=10,
+    # Use binary for paper-compatible graph connectivity, or distance for weighted edges.
+    edge_weighting="binary",
     # Symmetrize the final graph.
     symmetrize=True,
 )
@@ -102,10 +108,6 @@ Optional:
 - `notebooks/01_visualize_embedding.ipynb`: load data, build graph, embed in 2D, and plot.
 - `notebooks/02_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
 
-The notebooks default to the ignored local dataset `data/cellrank-zebrafish.h5ad`, a CellRank zebrafish development example with real developmental time slices in `obs["Stage"]` and lineage labels in `obs["lineages"]`. The visualization notebook writes `data/cellrank-zebrafish-scalp.h5ad`, which the evaluation notebook then reads.
+The notebooks default to `data/pancreas_normalized.h5ad`, a real batch-integration example with five pancreas studies/platforms in `obs["study"]` and curated cell types in `obs["cell_type"]`. The visualization notebook writes `data/pancreas_normalized-scalp.h5ad`, which the evaluation notebook then reads.
 
-To use a different dataset, set:
-
-```bash
-export SCALP_INPUT_H5AD=/path/to/your_dataset.h5ad
-```
+To switch datasets, edit `selected_dataset` in the first notebook cell. Available local choices are `pancreas`, `zebrafish`, and `pbmc3k`.

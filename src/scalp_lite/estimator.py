@@ -83,6 +83,9 @@ class ScalpEstimator:
     n_inter_edges: int = 1
     metric: str = "euclidean"
     assignment_quantile: float | None = 0.95
+    hubness_correction: str = "csls"
+    hubness_k: int = 10
+    edge_weighting: str = "distance"
     symmetrize: bool = True
     n_components: int = 40
     random_state: int = 0
@@ -233,6 +236,9 @@ class ScalpEstimator:
         n_inter_edges: int | None = None,
         metric: str | None = None,
         assignment_quantile: float | None = None,
+        hubness_correction: str | None = None,
+        hubness_k: int | None = None,
+        edge_weighting: str | None = None,
         symmetrize: bool | None = None,
     ) -> sparse.csr_matrix:
         """Build and return the SCALP-lite graph for an AnnData object."""
@@ -243,6 +249,9 @@ class ScalpEstimator:
         n_inter_edges = self.n_inter_edges if n_inter_edges is None else n_inter_edges
         metric = self.metric if metric is None else metric
         assignment_quantile = self.assignment_quantile if assignment_quantile is None else assignment_quantile
+        hubness_correction = self.hubness_correction if hubness_correction is None else hubness_correction
+        hubness_k = self.hubness_k if hubness_k is None else hubness_k
+        edge_weighting = self.edge_weighting if edge_weighting is None else edge_weighting
         symmetrize = self.symmetrize if symmetrize is None else symmetrize
 
         validate_adata(adata, batch_key=batch_key, rep_key=rep_key, require_rep=True)
@@ -255,6 +264,9 @@ class ScalpEstimator:
             n_inter_edges=n_inter_edges,
             metric=metric,
             assignment_quantile=assignment_quantile,
+            hubness_correction=hubness_correction,
+            hubness_k=hubness_k,
+            edge_weighting=edge_weighting,
             symmetrize=symmetrize,
         )
 
@@ -290,6 +302,9 @@ class ScalpEstimator:
         n_inter_edges: int | None = None,
         metric: str | None = None,
         assignment_quantile: float | None = None,
+        hubness_correction: str | None = None,
+        hubness_k: int | None = None,
+        edge_weighting: str | None = None,
         symmetrize: bool | None = None,
         embedding_method: str | None = None,
         embedding_components: int | None = None,
@@ -306,6 +321,9 @@ class ScalpEstimator:
             n_inter_edges=n_inter_edges,
             metric=metric,
             assignment_quantile=assignment_quantile,
+            hubness_correction=hubness_correction,
+            hubness_k=hubness_k,
+            edge_weighting=edge_weighting,
             symmetrize=symmetrize,
         )
         return self.graph_to_vector(

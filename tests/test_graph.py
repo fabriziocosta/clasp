@@ -6,6 +6,7 @@ from anndata import AnnData
 from scipy import sparse
 
 from scalp_lite.graph import build_inter_batch_graph, build_intra_batch_graph, build_scalp_graph
+from scalp_lite.graph.hubness import csls_distances, edge_weights
 from scalp_lite.preprocessing import ensure_pca
 
 
@@ -24,6 +25,64 @@ def test_hungarian_inter_batch_graph_creates_cross_batch_edges():
     graph = build_inter_batch_graph(left, right, n_inter_edges=1, assignment_quantile=1.0)
     assert graph.shape == (8, 8)
     assert graph.nnz == 8
+
+
+def test_csls_distances_apply_local_scaling():
+    distances = np.array(
+        [
+            [1.0, 2.0, 10.0],
+            [2.0, 3.0, 11.0],
+        ]
+    )
+
+    corrected = csls_distances(distances, k=1)
+
+    expected = np.array(
+        [
+            [0.0, 1.0, 9.0],
+            [1.0, 2.0, 10.0],
+        ]
+    )
+    np.testing.assert_allclose(corrected, expected)
+
+
+def test_hubness_correction_is_available_for_inter_batch_graph():
+    rng = np.random.default_rng(2)
+    left = rng.normal(size=(6, 3))
+    right = rng.normal(size=(7, 3))
+
+    graph = build_inter_batch_graph(
+        left,
+        right,
+        n_inter_edges=1,
+        assignment_quantile=1.0,
+        hubness_correction="csls",
+        hubness_k=2,
+    )
+
+    assert graph.shape == (6, 7)
+    assert graph.nnz == 6
+    assert np.isfinite(graph.data).all()
+    assert np.all(graph.data > 0)
+
+
+def test_binary_edge_weighting_sets_retained_edges_to_one():
+    distances = np.array([0.2, 1.5, -0.4])
+
+    weights = edge_weights(distances, edge_weighting="binary")
+
+    np.testing.assert_array_equal(weights, np.ones(3, dtype=np.float32))
+
+
+def test_binary_edge_weighting_is_available_for_graph_builders():
+    X = np.random.default_rng(3).normal(size=(8, 3))
+    intra = build_intra_batch_graph(X, n_neighbors=3, edge_weighting="binary")
+    inter = build_inter_batch_graph(X[:4], X[4:], n_inter_edges=1, assignment_quantile=1.0, edge_weighting="binary")
+
+    assert intra.nnz > 0
+    assert inter.nnz > 0
+    np.testing.assert_array_equal(intra.data, np.ones(intra.nnz, dtype=np.float32))
+    np.testing.assert_array_equal(inter.data, np.ones(inter.nnz, dtype=np.float32))
 
 
 def test_final_graph_is_sparse_square_symmetric_and_zero_diagonal(toy_adata):

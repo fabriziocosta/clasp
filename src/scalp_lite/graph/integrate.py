@@ -22,6 +22,9 @@ def build_scalp_graph(
     n_inter_edges: int = 1,
     metric: str = "euclidean",
     assignment_quantile: float | None = 0.95,
+    hubness_correction: str = "csls",
+    hubness_k: int = 10,
+    edge_weighting: str = "distance",
     symmetrize: bool = True,
 ) -> sparse.csr_matrix:
     """Build the SCALP-lite integrated graph for an AnnData object."""
@@ -42,7 +45,14 @@ def build_scalp_graph(
     inter_edges = 0
 
     for i, Xi in enumerate(batch_arrays):
-        block = build_intra_batch_graph(Xi, n_neighbors=intra_neighbors, metric=metric)
+        block = build_intra_batch_graph(
+            Xi,
+            n_neighbors=intra_neighbors,
+            metric=metric,
+            hubness_correction=hubness_correction,
+            hubness_k=hubness_k,
+            edge_weighting=edge_weighting,
+        )
         blocks[i][i] = block
         intra_edges += block.nnz
 
@@ -54,6 +64,9 @@ def build_scalp_graph(
                 n_inter_edges=n_inter_edges,
                 metric=metric,
                 assignment_quantile=assignment_quantile,
+                hubness_correction=hubness_correction,
+                hubness_k=hubness_k,
+                edge_weighting=edge_weighting,
             )
             blocks[i][j] = block
             blocks[j][i] = block.T.tocsr()
@@ -86,6 +99,9 @@ def build_scalp_graph(
             "n_inter_edges": n_inter_edges,
             "metric": metric,
             "assignment_quantile": assignment_quantile,
+            "hubness_correction": hubness_correction,
+            "hubness_k": hubness_k,
+            "edge_weighting": edge_weighting,
             "symmetrize": symmetrize,
         },
         "edge_counts": {
