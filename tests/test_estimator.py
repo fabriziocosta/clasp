@@ -39,6 +39,28 @@ def test_estimator_graph_and_embedding_methods(toy_adata):
     assert coords.shape == (adata.n_obs, 2)
 
 
+def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
+    estimator = ScalpEstimator(n_components=6, n_neighbors=6, embedding_method="spectral")
+    adata = estimator.preprocess(toy_adata, n_top_genes=None)
+
+    graph = estimator.data_to_graph(
+        adata,
+        n_neighbors=4,
+        intra_fraction=0.25,
+        n_inter_edges=2,
+        assignment_quantile=1.0,
+        symmetrize=False,
+    )
+
+    params = adata.uns["scalp_lite"]["graph"]["parameters"]
+    assert graph.shape == (adata.n_obs, adata.n_obs)
+    assert params["n_neighbors"] == 4
+    assert params["intra_fraction"] == 0.25
+    assert params["n_inter_edges"] == 2
+    assert params["assignment_quantile"] == 1.0
+    assert params["symmetrize"] is False
+
+
 def test_estimator_embed_combines_graph_and_vector(toy_adata):
     estimator = ScalpEstimator(n_components=6, embedding_method="spectral")
     adata = estimator.preprocess(toy_adata, n_top_genes=None)
@@ -46,3 +68,13 @@ def test_estimator_embed_combines_graph_and_vector(toy_adata):
     coords = estimator.embed(adata)
 
     assert coords.shape == (adata.n_obs, 2)
+
+
+def test_estimator_embed_accepts_graph_overrides(toy_adata):
+    estimator = ScalpEstimator(n_components=6, embedding_method="spectral")
+    adata = estimator.preprocess(toy_adata, n_top_genes=None)
+
+    coords = estimator.embed(adata, n_neighbors=4, intra_fraction=0.25, assignment_quantile=1.0)
+
+    assert coords.shape == (adata.n_obs, 2)
+    assert adata.uns["scalp_lite"]["graph"]["parameters"]["n_neighbors"] == 4

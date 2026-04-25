@@ -168,19 +168,40 @@ class ScalpEstimator:
         ensure_pca(result, rep_key=self.rep_key, n_components=self.n_components, random_state=self.random_state)
         return result
 
-    def data_to_graph(self, adata: ad.AnnData) -> sparse.csr_matrix:
+    def data_to_graph(
+        self,
+        adata: ad.AnnData,
+        *,
+        rep_key: str | None = None,
+        batch_key: str | None = None,
+        n_neighbors: int | None = None,
+        intra_fraction: float | None = None,
+        n_inter_edges: int | None = None,
+        metric: str | None = None,
+        assignment_quantile: float | None = None,
+        symmetrize: bool | None = None,
+    ) -> sparse.csr_matrix:
         """Build and return the SCALP-lite graph for an AnnData object."""
-        validate_adata(adata, batch_key=self.batch_key, rep_key=self.rep_key, require_rep=True)
+        rep_key = self.rep_key if rep_key is None else rep_key
+        batch_key = self.batch_key if batch_key is None else batch_key
+        n_neighbors = self.n_neighbors if n_neighbors is None else n_neighbors
+        intra_fraction = self.intra_fraction if intra_fraction is None else intra_fraction
+        n_inter_edges = self.n_inter_edges if n_inter_edges is None else n_inter_edges
+        metric = self.metric if metric is None else metric
+        assignment_quantile = self.assignment_quantile if assignment_quantile is None else assignment_quantile
+        symmetrize = self.symmetrize if symmetrize is None else symmetrize
+
+        validate_adata(adata, batch_key=batch_key, rep_key=rep_key, require_rep=True)
         return build_scalp_graph(
             adata,
-            rep_key=self.rep_key,
-            batch_key=self.batch_key,
-            n_neighbors=self.n_neighbors,
-            intra_fraction=self.intra_fraction,
-            n_inter_edges=self.n_inter_edges,
-            metric=self.metric,
-            assignment_quantile=self.assignment_quantile,
-            symmetrize=self.symmetrize,
+            rep_key=rep_key,
+            batch_key=batch_key,
+            n_neighbors=n_neighbors,
+            intra_fraction=intra_fraction,
+            n_inter_edges=n_inter_edges,
+            metric=metric,
+            assignment_quantile=assignment_quantile,
+            symmetrize=symmetrize,
         )
 
     def graph_to_vector(self, graph: sparse.spmatrix) -> np.ndarray:
@@ -192,7 +213,29 @@ class ScalpEstimator:
             random_state=self.random_state,
         )
 
-    def embed(self, adata: ad.AnnData) -> np.ndarray:
+    def embed(
+        self,
+        adata: ad.AnnData,
+        *,
+        rep_key: str | None = None,
+        batch_key: str | None = None,
+        n_neighbors: int | None = None,
+        intra_fraction: float | None = None,
+        n_inter_edges: int | None = None,
+        metric: str | None = None,
+        assignment_quantile: float | None = None,
+        symmetrize: bool | None = None,
+    ) -> np.ndarray:
         """Build the graph from AnnData and return embedding vectors."""
-        graph = self.data_to_graph(adata)
+        graph = self.data_to_graph(
+            adata,
+            rep_key=rep_key,
+            batch_key=batch_key,
+            n_neighbors=n_neighbors,
+            intra_fraction=intra_fraction,
+            n_inter_edges=n_inter_edges,
+            metric=metric,
+            assignment_quantile=assignment_quantile,
+            symmetrize=symmetrize,
+        )
         return self.graph_to_vector(graph)

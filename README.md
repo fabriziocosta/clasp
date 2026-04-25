@@ -7,7 +7,7 @@ It intentionally avoids the legacy research dependencies from the original `cell
 ## Install
 
 ```bash
-pip install -e ".[dev,umap,preprocess]"
+pip install -e ".[dev,umap]"
 ```
 
 UMAP is optional. If `umap-learn` is not installed, `embed_graph(method="auto")` falls back to spectral embedding from scikit-learn.
@@ -26,7 +26,14 @@ estimator = ScalpEstimator(batch_key="batch", label_key="label")
 adata = estimator.input("input.h5ad")
 adata = estimator.preprocess(adata, n_top_genes=2000, max_cells=None)
 
-graph = estimator.data_to_graph(adata)
+graph = estimator.data_to_graph(
+    adata,
+    n_neighbors=15,
+    intra_fraction=0.5,
+    n_inter_edges=1,
+    assignment_quantile=0.95,
+    symmetrize=True,
+)
 adata.obsm["X_scalp"] = estimator.graph_to_vector(graph)
 scores = score_embedding(adata, embedding_key="X_scalp", batch_key="batch", label_key="label", graph=graph)
 
