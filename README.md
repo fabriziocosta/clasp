@@ -7,7 +7,7 @@ It intentionally avoids the legacy research dependencies from the original `cell
 ## Install
 
 ```bash
-pip install -e ".[dev,umap]"
+pip install -e ".[dev,umap,preprocess]"
 ```
 
 UMAP is optional. If `umap-learn` is not installed, `embed_graph(method="auto")` falls back to spectral embedding from scikit-learn.
@@ -16,33 +16,27 @@ UMAP is optional. If `umap-learn` is not installed, `embed_graph(method="auto")`
 
 ```python
 from scalp_lite import (
-    read_h5ad,
-    validate_adata,
-    ensure_pca,
-    build_scalp_graph,
-    embed_graph,
+    ScalpEstimator,
+    save_h5ad,
     score_embedding,
     plot_embedding_pair,
 )
 
-adata = read_h5ad("input.h5ad")
-validate_adata(adata, batch_key="batch", label_key="label")
-ensure_pca(adata, rep_key="X_pca", n_components=40)
+estimator = ScalpEstimator(batch_key="batch", label_key="label")
+adata = estimator.input("input.h5ad")
+adata = estimator.preprocess(adata, n_top_genes=2000, max_cells=None)
 
-graph = build_scalp_graph(
-    adata,
-    rep_key="X_pca",
-    batch_key="batch",
-    n_neighbors=15,
-    intra_fraction=0.5,
-    n_inter_edges=1,
-)
-
-adata.obsm["X_scalp"] = embed_graph(graph, method="auto")
+graph = estimator.data_to_graph(adata)
+adata.obsm["X_scalp"] = estimator.graph_to_vector(graph)
 scores = score_embedding(adata, embedding_key="X_scalp", batch_key="batch", label_key="label", graph=graph)
 
 plot_embedding_pair(adata, embedding_key="X_scalp", batch_key="batch", label_key="label")
+save_h5ad(adata, "scalp_lite_embedded.h5ad")
 ```
+
+`plot_embedding_pair` uses a viridis palette for batches and a categorical `tab20` palette for labels by default.
+
+When Scanpy is installed, `ScalpEstimator.preprocess` follows the standard single-cell preprocessing pattern used by the original project: filter genes with low counts, normalize each cell to 10,000 counts, apply `log1p`, select highly variable genes with `scanpy.pp.highly_variable_genes`, and compute PCA. If Scanpy is unavailable, it falls back to variance-based gene selection.
 
 ## AnnData Schema
 
@@ -61,7 +55,9 @@ Optional:
 - `notebooks/01_visualize_embedding.ipynb`: load data, build graph, embed in 2D, and plot.
 - `notebooks/02_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
 
-The notebooks use `input.h5ad` as a placeholder. Either place your dataset at that path from the repository root or set:
+The notebooks default to the ignored local dataset `data/cellrank-pancreas.h5ad`, a CellRank pancreas development example with fine cell-type labels in `obs["clusters_fine"]`. Because this example has no real batch column, the visualization notebook creates deterministic artificial `batch` splits for smoke testing and maps `clusters_fine` to `label`.
+
+To use a different dataset, set:
 
 ```bash
 export SCALP_INPUT_H5AD=/path/to/your_dataset.h5ad

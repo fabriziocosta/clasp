@@ -21,6 +21,17 @@ def test_plot_embedding_pair_returns_two_axes(toy_adata):
     plt.close(axes[0].figure)
 
 
+def test_plot_embedding_pair_uses_distinct_default_palettes(toy_adata):
+    toy_adata.obsm["X_scalp"] = toy_adata.X[:, :2]
+
+    axes = plot_embedding_pair(toy_adata, embedding_key="X_scalp", batch_key="batch", label_key="label")
+
+    batch_color = axes[0].collections[0].get_facecolors()[0]
+    label_color = axes[1].collections[0].get_facecolors()[0]
+    assert tuple(batch_color) != tuple(label_color)
+    plt.close(axes[0].figure)
+
+
 def test_plot_embedding_pair_rejects_missing_label(toy_adata):
     toy_adata.obsm["X_scalp"] = toy_adata.X[:, :2]
 

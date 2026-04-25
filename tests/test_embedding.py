@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import warnings
 
 import pytest
 
@@ -44,3 +45,20 @@ def test_umap_method_errors_when_umap_unavailable(monkeypatch, toy_adata):
     monkeypatch.setattr(builtins, "__import__", fake_import)
     with pytest.raises(ImportError, match="umap-learn"):
         embed_graph(graph, method="umap", n_components=2)
+
+
+def test_umap_embedding_suppresses_expected_noise(capsys, toy_adata):
+    pytest.importorskip("umap")
+    ensure_pca(toy_adata, n_components=6)
+    graph = build_scalp_graph(toy_adata, n_neighbors=6)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        coords = embed_graph(graph, method="umap", n_components=2, n_epochs=10)
+
+    captured = capsys.readouterr()
+    messages = "\n".join(str(item.message) for item in caught)
+    assert coords.shape == (toy_adata.n_obs, 2)
+    assert "using precomputed metric" not in messages
+    assert "n_jobs value" not in messages
+    assert "omp_set_nested" not in captured.err

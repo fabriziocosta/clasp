@@ -30,6 +30,7 @@ def _plot_embedding_on_axis(
     s: float,
     alpha: float,
     legend: bool | str,
+    palette=None,
 ):
     df = _embedding_frame(adata, embedding_key=embedding_key, color_key=color_key)
     sns.scatterplot(
@@ -37,6 +38,7 @@ def _plot_embedding_on_axis(
         x="x",
         y="y",
         hue=color_key,
+        palette=palette,
         s=s,
         alpha=alpha,
         linewidth=0,
@@ -74,6 +76,7 @@ def plot_embedding(
         s=s,
         alpha=alpha,
         legend=True,
+        palette=None,
     )
 
 
@@ -87,8 +90,15 @@ def plot_embedding_pair(
     figsize: tuple[float, float] = (12, 5),
     s: float = 12,
     alpha: float = 0.85,
+    batch_palette: str | list | dict | None = "viridis",
+    label_palette: str | list | dict | None = "tab20",
 ):
-    """Plot one embedding twice: colored by batch and by biological label."""
+    """Plot one embedding twice: colored by batch and by biological label.
+
+    The default palettes mirror the paper-style qualitative figures: viridis
+    for ordered batch/time slices and a high-contrast categorical palette for
+    cell-type labels.
+    """
     if axes is None:
         _, axes = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
     axes = np.asarray(axes).ravel()
@@ -104,6 +114,7 @@ def plot_embedding_pair(
         s=s,
         alpha=alpha,
         legend=True,
+        palette=batch_palette,
     )
     _plot_embedding_on_axis(
         adata,
@@ -114,5 +125,6 @@ def plot_embedding_pair(
         s=s,
         alpha=alpha,
         legend=True,
+        palette=label_palette,
     )
     return axes

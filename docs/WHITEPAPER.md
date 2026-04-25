@@ -257,6 +257,7 @@ Current limitations:
 ```text
 load .h5ad
 validate AnnData schema
+normalize expression and select highly variable genes
 ensure PCA representation exists
 build SCALP-lite graph
 embed graph with UMAP or spectral embedding
@@ -265,8 +266,9 @@ score embedding quality
 save embedded .h5ad
 ```
 
+The object-oriented entry point for this workflow is `ScalpEstimator`. Its `preprocess()` method uses Scanpy's `normalize_total`, `log1p`, `filter_genes`, and `highly_variable_genes` when Scanpy is installed, matching the standard preprocessing pattern used in the original `cellsaw` codebase. A variance-based selector is kept as a lightweight fallback.
+
 This workflow is implemented in:
 
 - `notebooks/01_visualize_embedding.ipynb`
 - `notebooks/02_evaluate_embedding.ipynb`
-

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import contextlib
+import os
+import sys
+import warnings
+
 import numpy as np
 from scipy import sparse
 from sklearn.manifold import SpectralEmbedding
@@ -11,6 +16,29 @@ def _umap_available():
     except ImportError:
         return False
     return True
+
+
+@contextlib.contextmanager
+def _suppress_known_umap_noise():
+    """Suppress expected UMAP/OpenMP messages for graph-based embeddings."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="using precomputed metric; inverse_transform will be unavailable")
+        warnings.filterwarnings("ignore", message="n_jobs value .* overridden to 1 by setting random_state.*")
+
+        try:
+            stderr_fd = sys.__stderr__.fileno()
+        except (AttributeError, OSError):
+            yield
+            return
+        saved_stderr_fd = os.dup(stderr_fd)
+        devnull_fd = os.open(os.devnull, os.O_WRONLY)
+        try:
+            os.dup2(devnull_fd, stderr_fd)
+            yield
+        finally:
+            os.dup2(saved_stderr_fd, stderr_fd)
+            os.close(saved_stderr_fd)
+            os.close(devnull_fd)
 
 
 def embed_graph(
@@ -43,12 +71,13 @@ def embed_graph(
         max_dist = np.nanmax(dense[np.isfinite(dense)]) if dense.size else 1.0
         dense[dense == 0] = max_dist * 2
         np.fill_diagonal(dense, 0)
-        return umap.UMAP(
-            n_components=n_components,
-            metric="precomputed",
-            random_state=random_state,
-            **kwargs,
-        ).fit_transform(dense)
+        with _suppress_known_umap_noise():
+            return umap.UMAP(
+                n_components=n_components,
+                metric="precomputed",
+                random_state=random_state,
+                **kwargs,
+            ).fit_transform(dense)
 
     if method == "spectral":
         return SpectralEmbedding(
