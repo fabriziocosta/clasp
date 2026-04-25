@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+import numpy as np
+from scipy import sparse
+from scipy.optimize import linear_sum_assignment
+from sklearn.metrics import pairwise_distances
+
+
+def _iterated_assignment(distances: np.ndarray, n_repeats: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    working = distances.copy()
+    all_rows: list[np.ndarray] = []
+    all_cols: list[np.ndarray] = []
+    all_distances: list[np.ndarray] = []
+
+    for _ in range(max(0, n_repeats)):
+        if not np.isfinite(working).any():
+            break
+        rows, cols = linear_sum_assignment(working)
+        vals = working[rows, cols]
+        keep = np.isfinite(vals)
+        rows, cols, vals = rows[keep], cols[keep], vals[keep]
+        if len(rows) == 0:
+            break
+        all_rows.append(rows)
+        all_cols.append(cols)
+        all_distances.append(vals)
+        working[rows, cols] = np.inf
+
+    if not all_rows:
+        empty = np.array([], dtype=int)
+        return empty, empty, np.array([], dtype=float)
+    return np.concatenate(all_rows), np.concatenate(all_cols), np.concatenate(all_distances)
+
+
+def build_inter_batch_graph(
+    X_left: np.ndarray,
+    X_right: np.ndarray,
+    *,
+    n_inter_edges: int = 1,
+    metric: str = "euclidean",
+    assignment_quantile: float | None = 0.95,
+) -> sparse.csr_matrix:
+    """Build a sparse cross-batch graph using repeated Hungarian assignment."""
+    shape = (X_left.shape[0], X_right.shape[0])
+    if shape[0] == 0 or shape[1] == 0 or n_inter_edges <= 0:
+        return sparse.csr_matrix(shape, dtype=np.float32)
+
+    distances = pairwise_distances(X_left, X_right, metric=metric)
+    rows, cols, vals = _iterated_assignment(distances, n_inter_edges)
+
+    if assignment_quantile is not None and len(vals) > 0:
+        if not 0 < assignment_quantile <= 1:
+            raise ValueError("assignment_quantile must be in (0, 1] or None.")
+        cutoff = np.quantile(vals, assignment_quantile)
+        keep = vals <= cutoff
+        rows, cols, vals = rows[keep], cols[keep], vals[keep]
+
+    weights = 1.0 / (1.0 + vals)
+    return sparse.csr_matrix((weights.astype(np.float32), (rows, cols)), shape=shape)
