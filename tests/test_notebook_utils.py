@@ -4,6 +4,7 @@ from scalp_lite.notebook_utils import (
     DOWNLOAD_REGISTRY,
     PAPER_DATASET_DOWNLOADS,
     PAPER_DATASETS_REQUIRING_MANUAL_CURATION,
+    dataset_config,
     load_optimized_graph_params,
     make_compact_search_space,
     optimization_search_space,
@@ -154,3 +155,14 @@ def test_manual_paper_dataset_list_documents_unresolved_sources():
         assert row["dataset"]
         assert row["paper_description"]
         assert row["reason"]
+
+
+def test_dataset_config_accepts_download_registry_entries(tmp_path):
+    dataset = dataset_config("scib_pancreas", project_root=tmp_path)
+
+    assert dataset["input_path"] == tmp_path / "data" / "human_pancreas_norm_complexBatch.h5ad"
+    assert dataset["output_path"] == tmp_path / "data" / "human_pancreas_norm_complexBatch-scalp.h5ad"
+    assert dataset["batch_key"] == "tech"
+    assert dataset["label_key"] == "celltype"
+    assert dataset["preprocess"]["normalize"] is False
+    assert dataset["graph"]["hubness_correction"] == "csls"

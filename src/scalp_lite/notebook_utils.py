@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import gc
 import hashlib
 import json
 import os
@@ -94,14 +95,37 @@ DATASET_REGISTRY = {
 }
 
 
+DEFAULT_PREPROCESS_PARAMS = {
+    "normalize": False,
+    "hvg_flavor": "variance",
+    "min_gene_counts": 0,
+    "create_artificial_batch": False,
+}
+
+
+DEFAULT_GRAPH_PARAMS = {
+    "n_neighbors": 20,
+    "intra_fraction": 0.5,
+    "n_inter_edges": 5,
+    "assignment_quantile": 0.35,
+    "hubness_correction": "csls",
+    "hubness_k": 10,
+    "rank_correction": True,
+    "edge_weighting": "distance",
+    "mutual_neighbors": False,
+    "neighbor_mode": "distance",
+    "symmetrize": True,
+}
+
+
 DOWNLOAD_REGISTRY = {
     "scib_pancreas": {
         "kind": "figshare",
         "filename": "human_pancreas_norm_complexBatch.h5ad",
         "article_id": 12420968,
         "preferred_file": "human_pancreas_norm_complexBatch.h5ad",
-        "batch_key": "study",
-        "label_key": "cell_type",
+        "batch_key": "tech",
+        "label_key": "celltype",
         "source": "https://figshare.com/articles/dataset/12420968",
         "paper_group": "scIB benchmark",
     },
@@ -263,7 +287,24 @@ def resolve_project_path(path: str | Path, *, project_root: Path | None = None) 
 
 
 def dataset_config(name: str, *, embedded: bool = False, project_root: Path | None = None) -> dict:
-    dataset = DATASET_REGISTRY[name].copy()
+    if name in DATASET_REGISTRY:
+        dataset = DATASET_REGISTRY[name].copy()
+    elif name in DOWNLOAD_REGISTRY:
+        download = DOWNLOAD_REGISTRY[name]
+        input_path = Path("data") / download["filename"]
+        dataset = {
+            "input": str(input_path),
+            "embedded": str(input_path.with_name(f"{input_path.stem}-scalp.h5ad")),
+            "batch_key": download["batch_key"],
+            "label_key": download["label_key"],
+            "preprocess": DEFAULT_PREPROCESS_PARAMS.copy(),
+            "graph": DEFAULT_GRAPH_PARAMS.copy(),
+            "source": download["source"],
+            "paper_group": download.get("paper_group"),
+        }
+    else:
+        available = sorted(set(DATASET_REGISTRY) | set(DOWNLOAD_REGISTRY))
+        raise KeyError(f"Unknown dataset {name!r}. Available datasets: {available}")
     key = "embedded" if embedded else "input"
     dataset["input_path"] = resolve_project_path(dataset[key], project_root=project_root)
     dataset["output_path"] = dataset["input_path"].with_name(f"{dataset['input_path'].stem}-scalp.h5ad")
@@ -486,7 +527,8 @@ def make_scalp_optimization_objective(
     estimator_search_space: dict,
     graph_search_space: dict,
     random_state: int = 0,
-    embedding_epochs: int = 100,
+    embedding_method: str = "umap",
+    embedding_epochs: int | None = 60,
     invalid_score: float = -1e9,
     label_weight: float = 1.0,
     batch_weight: float = 0.25,
@@ -506,11 +548,16 @@ def make_scalp_optimization_objective(
         trial_estimator = make_estimator(dataset, random_state=random_state, **trial_estimator_params)
         try:
             trial = trial_estimator.preprocess(raw_adata, **trial_preprocess)
+            embedding_kwargs = {
+                "embedding_method": embedding_method,
+                "embedding_random_state": random_state,
+            }
+            if embedding_epochs is not None and embedding_method in {"auto", "umap"}:
+                embedding_kwargs["n_epochs"] = embedding_epochs
             trial.obsm["X_scalp"] = trial_estimator.embed(
                 trial,
                 **trial_graph,
-                embedding_random_state=random_state,
-                n_epochs=embedding_epochs,
+                **embedding_kwargs,
             )
             scores = score_embedding(
                 trial,
@@ -525,10 +572,14 @@ def make_scalp_optimization_objective(
             )
             return float(invalid_score)
 
-        label_agreement = metric_value(scores, "knn_label_agreement")
-        batch_mixing = metric_value(scores, "batch_mixing")
-        graph_density = metric_value(scores, "graph_density")
-        return float(label_weight * label_agreement + batch_weight * batch_mixing + density_weight * graph_density)
+        try:
+            label_agreement = metric_value(scores, "knn_label_agreement")
+            batch_mixing = metric_value(scores, "batch_mixing")
+            graph_density = metric_value(scores, "graph_density")
+            return float(label_weight * label_agreement + batch_weight * batch_mixing + density_weight * graph_density)
+        finally:
+            del trial
+            gc.collect()
 
     return objective
 
@@ -808,27 +859,40 @@ def download_datasets(selected_datasets, *, data_dir: str | Path, overwrite: boo
     return downloaded
 
 
-def summarize_downloads(downloaded: dict[str, Path], *, project_root: Path | None = None) -> pd.DataFrame:
+def summarize_downloads(
+    downloaded: dict[str, Path],
+    *,
+    project_root: Path | None = None,
+    inspect_h5ad: bool = False,
+) -> pd.DataFrame:
     project_root = resolve_project_root() if project_root is None else project_root
     rows = []
     for name, path in downloaded.items():
+        path = Path(path)
         dataset = DOWNLOAD_REGISTRY[name]
-        adata = ad.read_h5ad(path, backed="r")
-        rows.append(
-            {
-                "dataset": name,
-                "path": str(Path(path).relative_to(project_root)),
-                "cells": adata.n_obs,
-                "genes": adata.n_vars,
-                "batch_key": dataset["batch_key"],
-                "has_batch_key": dataset["batch_key"] in adata.obs,
-                "label_key": dataset["label_key"],
-                "has_label_key": dataset["label_key"] in adata.obs,
-                "source": dataset["source"],
-                "paper_group": dataset.get("paper_group"),
-            }
-        )
-        adata.file.close()
+        row = {
+            "dataset": name,
+            "path": str(path.relative_to(project_root)),
+            "file_size_gb": round(path.stat().st_size / 1024**3, 3),
+            "batch_key": dataset["batch_key"],
+            "label_key": dataset["label_key"],
+            "source": dataset["source"],
+            "paper_group": dataset.get("paper_group"),
+        }
+        if inspect_h5ad:
+            adata = ad.read_h5ad(path, backed="r")
+            try:
+                row.update(
+                    {
+                        "cells": adata.n_obs,
+                        "genes": adata.n_vars,
+                        "has_batch_key": dataset["batch_key"] in adata.obs,
+                        "has_label_key": dataset["label_key"] in adata.obs,
+                    }
+                )
+            finally:
+                adata.file.close()
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
