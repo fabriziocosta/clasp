@@ -154,11 +154,7 @@ result = latent_bayesopt(
 The default objective is:
 
 $$
-\mathrm{score}
-=
-\mathrm{knn\_label\_agreement}
-+ 0.25 \cdot \mathrm{batch\_mixing}
-- 0.05 \cdot \mathrm{graph\_density}
+\mathrm{score}=\mathrm{knn\_label\_agreement}+ 0.25 \cdot \mathrm{batch\_mixing}- 0.05 \cdot \mathrm{graph\_density}
 $$
 
 This favors biological label coherence, modest batch mixing, and less dense graphs. These weights are intentionally exposed in the notebook because the right tradeoff depends on the dataset.

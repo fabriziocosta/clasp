@@ -106,3 +106,27 @@ def test_save_best_optimization_result_uses_best_model(tmp_path):
     assert estimator == {"n_components": 100}
     assert graph == {"n_neighbors": 22}
     assert payload["metadata"]["best_model"] == "gplvm"
+
+
+def test_save_best_optimization_result_allows_pca_only(tmp_path):
+    path, _, _, graph = save_best_optimization_result(
+        dataset_name="pancreas",
+        optimization_results={
+            "pca": {"best_score": 0.5, "best_params": {"n_neighbors": 10}},
+        },
+        base_preprocess_params={},
+        fixed_preprocess_params={},
+        base_estimator_params={},
+        base_graph_params={"n_neighbors": 15},
+        preprocess_search_space={},
+        estimator_search_space={},
+        graph_search_space={"n_neighbors": {"type": "int", "bounds": [5, 40]}},
+        random_state=0,
+        project_root=tmp_path,
+    )
+
+    payload = load_optimized_graph_params("pancreas", project_root=tmp_path)
+    assert path.exists()
+    assert graph == {"n_neighbors": 10}
+    assert payload["metadata"]["best_model"] == "pca"
+    assert "gplvm_best_score" not in payload["metadata"]

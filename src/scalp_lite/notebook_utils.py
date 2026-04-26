@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -215,6 +216,35 @@ def load_optimized_graph_params(
     return json.loads(path.read_text())
 
 
+def load_or_default_params(
+    dataset_name: str,
+    dataset: dict | None = None,
+    *,
+    project_root: Path | None = None,
+    params_dir: str | Path = "data/optimized_params",
+) -> dict:
+    dataset = dataset_config(dataset_name, project_root=project_root) if dataset is None else dataset
+    path = optimized_params_path(dataset_name, project_root=project_root, params_dir=params_dir)
+    try:
+        payload = load_optimized_graph_params(dataset_name, project_root=project_root, params_dir=params_dir)
+        payload.setdefault("source", "optimized")
+        payload.setdefault("path", str(path))
+        return payload
+    except FileNotFoundError:
+        return {
+            "dataset": dataset_name,
+            "graph_params": dataset.get("graph", {}).copy(),
+            "preprocess_params": dataset.get("preprocess", {}).copy(),
+            "estimator_params": {},
+            "metadata": {
+                "source": "dataset_defaults",
+                "message": f"No optimized parameter file found at {path}; using dataset registry defaults.",
+            },
+            "source": "dataset_defaults",
+            "path": str(path),
+        }
+
+
 def install_bo_warning_filters() -> None:
     warnings.filterwarnings(
         "ignore",
@@ -224,11 +254,31 @@ def install_bo_warning_filters() -> None:
     )
 
 
-def ensure_bo_dependencies() -> None:
+def limit_native_threads(n_threads: int = 1) -> None:
+    value = str(n_threads)
+    for name in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        os.environ.setdefault(name, value)
+
+
+def ensure_bo_dependencies(n_threads: int = 1) -> None:
+    limit_native_threads(n_threads)
     install_bo_warning_filters()
     try:
         import botorch  # noqa: F401
         import gpytorch  # noqa: F401
+        import torch
+
+        torch.set_num_threads(n_threads)
+        try:
+            torch.set_num_interop_threads(n_threads)
+        except RuntimeError:
+            pass
     except ImportError:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", "..[bo]"])
 
@@ -446,19 +496,23 @@ def save_best_optimization_result(
         estimator_search_space=estimator_search_space,
         graph_search_space=graph_search_space,
     )
+    metadata = {
+        "best_model": best_model_name,
+        "best_score": best_result["best_score"],
+        "fixed_preprocess_params": fixed_preprocess_params,
+        "random_state": random_state,
+    }
+    if "pca" in optimization_results:
+        metadata["pca_best_score"] = optimization_results["pca"]["best_score"]
+    if "gplvm" in optimization_results:
+        metadata["gplvm_best_score"] = optimization_results["gplvm"]["best_score"]
+
     path = save_optimized_graph_params(
         dataset_name,
         optimized_graph_params,
         preprocess_params=optimized_preprocess_params,
         estimator_params=optimized_estimator_params,
-        metadata={
-            "best_model": best_model_name,
-            "best_score": best_result["best_score"],
-            "pca_best_score": optimization_results["pca"]["best_score"],
-            "gplvm_best_score": optimization_results["gplvm"]["best_score"],
-            "fixed_preprocess_params": fixed_preprocess_params,
-            "random_state": random_state,
-        },
+        metadata=metadata,
         project_root=project_root,
     )
     return path, optimized_preprocess_params, optimized_estimator_params, optimized_graph_params
