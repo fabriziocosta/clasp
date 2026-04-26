@@ -178,6 +178,8 @@ def save_optimized_graph_params(
     dataset_name: str,
     graph_params: dict,
     *,
+    preprocess_params: dict | None = None,
+    estimator_params: dict | None = None,
     metadata: dict | None = None,
     project_root: Path | None = None,
     params_dir: str | Path = "data/optimized_params",
@@ -187,6 +189,8 @@ def save_optimized_graph_params(
     payload = {
         "dataset": dataset_name,
         "graph_params": _json_ready(graph_params),
+        "preprocess_params": _json_ready(preprocess_params or {}),
+        "estimator_params": _json_ready(estimator_params or {}),
         "metadata": _json_ready(metadata or {}),
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")

@@ -110,8 +110,8 @@ Optional:
 ## Notebooks
 
 - `notebooks/00_download_datasets.ipynb`: download registered `.h5ad` datasets into `data/`.
-- `notebooks/01_latent_bayesopt.ipynb`: optimize graph parameters and save them to `data/optimized_params/`.
-- `notebooks/02_visualize_embedding.ipynb`: load optimized parameters, embed in 2D, plot, and save the embedded AnnData.
+- `notebooks/01_latent_bayesopt.ipynb`: optimize preprocessing PCA and graph parameters, then save them to `data/optimized_params/`.
+- `notebooks/02_visualize_embedding.ipynb`: load optimized preprocessing and graph parameters, embed in 2D, plot, and save the embedded AnnData.
 - `notebooks/03_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
 - `notebooks/04_assignment_quantile_sweep.ipynb`: sweep graph parameters around the optimized baseline.
 

@@ -13,6 +13,8 @@ def test_optimized_graph_params_roundtrip(tmp_path):
     path = save_optimized_graph_params(
         "pancreas",
         graph_params,
+        preprocess_params={"n_top_genes": 2000},
+        estimator_params={"n_components": 80},
         metadata={"best_score": 0.94},
         project_root=tmp_path,
     )
@@ -21,4 +23,6 @@ def test_optimized_graph_params_roundtrip(tmp_path):
     payload = load_optimized_graph_params("pancreas", project_root=tmp_path)
     assert payload["dataset"] == "pancreas"
     assert payload["graph_params"] == graph_params
+    assert payload["preprocess_params"]["n_top_genes"] == 2000
+    assert payload["estimator_params"]["n_components"] == 80
     assert payload["metadata"]["best_score"] == 0.94

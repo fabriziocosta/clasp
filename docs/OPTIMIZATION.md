@@ -17,8 +17,10 @@ The notebook performs this installation lazily if BoTorch or GPyTorch are missin
 
 ## Motivation
 
-The graph builder exposes several interacting parameters:
+The preprocessing and graph builder expose several interacting parameters:
 
+- `n_top_genes`
+- `n_components`
 - `n_neighbors`
 - `intra_fraction`
 - `n_inter_edges`
@@ -50,6 +52,8 @@ The search space is explicit and typed:
 
 ```python
 search_space = {
+    "n_top_genes": {"type": "int", "bounds": [500, 3000]},
+    "n_components": {"type": "int", "bounds": [20, 150]},
     "n_neighbors": {"type": "int", "bounds": [5, 40]},
     "intra_fraction": {"type": "float", "bounds": [0.2, 0.9]},
     "n_inter_edges": {"type": "int", "bounds": [1, 8]},
