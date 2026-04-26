@@ -5,7 +5,7 @@ SCALP-lite includes an optional hyperparameter optimizer for expensive graph-emb
 The implementation lives in:
 
 - `src/scalp_lite/optimization/latent_bo.py`
-- `notebooks/04_latent_bayesopt.ipynb`
+- `notebooks/01_latent_bayesopt.ipynb`
 
 The optional dependencies are installed with:
 
@@ -140,7 +140,7 @@ result = latent_bayesopt(
 
 ## Objective Used In The Notebook
 
-`notebooks/04_latent_bayesopt.ipynb` defines a SCALP objective that:
+`notebooks/01_latent_bayesopt.ipynb` defines a SCALP objective that:
 
 1. Copies a preprocessed `AnnData`.
 2. Embeds it with candidate graph parameters.

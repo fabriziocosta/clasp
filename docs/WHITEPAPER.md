@@ -414,5 +414,6 @@ The object-oriented entry point for this workflow is `ScalpEstimator`. Its `prep
 
 This workflow is implemented in:
 
-- `notebooks/01_visualize_embedding.ipynb`
-- `notebooks/02_evaluate_embedding.ipynb`
+- `notebooks/01_latent_bayesopt.ipynb`
+- `notebooks/02_visualize_embedding.ipynb`
+- `notebooks/03_evaluate_embedding.ipynb`

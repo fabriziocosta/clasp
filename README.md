@@ -109,9 +109,12 @@ Optional:
 
 ## Notebooks
 
-- `notebooks/01_visualize_embedding.ipynb`: load data, build graph, embed in 2D, and plot.
-- `notebooks/02_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
+- `notebooks/00_download_datasets.ipynb`: download registered `.h5ad` datasets into `data/`.
+- `notebooks/01_latent_bayesopt.ipynb`: optimize graph parameters and save them to `data/optimized_params/`.
+- `notebooks/02_visualize_embedding.ipynb`: load optimized parameters, embed in 2D, plot, and save the embedded AnnData.
+- `notebooks/03_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
+- `notebooks/04_assignment_quantile_sweep.ipynb`: sweep graph parameters around the optimized baseline.
 
-The notebooks default to `data/pancreas_normalized.h5ad`, a real batch-integration example with five pancreas studies/platforms in `obs["study"]` and curated cell types in `obs["cell_type"]`. The visualization notebook writes `data/pancreas_normalized-scalp.h5ad`, which the evaluation notebook then reads.
+The notebooks default to `data/pancreas_normalized.h5ad`, a real batch-integration example with five pancreas studies/platforms in `obs["study"]` and curated cell types in `obs["cell_type"]`. The optimization notebook writes optimized graph parameters, the visualization notebook writes `data/pancreas_normalized-scalp.h5ad`, and the evaluation notebook then reads that embedded file.
 
 To switch datasets, edit `selected_dataset` in the first notebook cell. Available local choices are `pancreas`, `zebrafish`, and `pbmc3k`.
