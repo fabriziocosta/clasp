@@ -9,7 +9,17 @@ import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
 
-warnings.filterwarnings("ignore", message="Found Intel OpenMP .* LLVM OpenMP .*", category=RuntimeWarning)
+
+def _install_known_bo_warning_filters() -> None:
+    warnings.filterwarnings(
+        "ignore",
+        message=r"\s*Found Intel OpenMP .* LLVM OpenMP .*",
+        category=RuntimeWarning,
+        module=r"threadpoolctl",
+    )
+
+
+_install_known_bo_warning_filters()
 
 
 def _require_botorch():
@@ -276,8 +286,8 @@ class LatentScaler:
 @contextlib.contextmanager
 def _suppress_known_bo_noise():
     with warnings.catch_warnings():
+        _install_known_bo_warning_filters()
         warnings.filterwarnings("ignore", message="Data \\(input features\\) is not contained to the unit cube.*")
-        warnings.filterwarnings("ignore", message="Found Intel OpenMP .* LLVM OpenMP .*", category=RuntimeWarning)
         yield
 
 

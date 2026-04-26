@@ -152,6 +152,62 @@ def dataset_config(name: str, *, embedded: bool = False, project_root: Path | No
     return dataset
 
 
+def optimized_params_path(
+    dataset_name: str,
+    *,
+    project_root: Path | None = None,
+    params_dir: str | Path = "data/optimized_params",
+) -> Path:
+    params_dir = resolve_project_path(params_dir, project_root=project_root)
+    return params_dir / f"{dataset_name}_graph_params.json"
+
+
+def _json_ready(value):
+    if isinstance(value, dict):
+        return {key: _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
+def save_optimized_graph_params(
+    dataset_name: str,
+    graph_params: dict,
+    *,
+    metadata: dict | None = None,
+    project_root: Path | None = None,
+    params_dir: str | Path = "data/optimized_params",
+) -> Path:
+    path = optimized_params_path(dataset_name, project_root=project_root, params_dir=params_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "dataset": dataset_name,
+        "graph_params": _json_ready(graph_params),
+        "metadata": _json_ready(metadata or {}),
+    }
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return path
+
+
+def load_optimized_graph_params(
+    dataset_name: str,
+    *,
+    project_root: Path | None = None,
+    params_dir: str | Path = "data/optimized_params",
+) -> dict:
+    path = optimized_params_path(dataset_name, project_root=project_root, params_dir=params_dir)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Optimized graph parameter file not found: {path}. "
+            "Run the latent Bayesian optimization notebook first."
+        )
+    return json.loads(path.read_text())
+
+
 def make_estimator(dataset: dict, *, n_components: int = 100, random_state: int = 0) -> ScalpEstimator:
     return ScalpEstimator(
         batch_key=dataset["batch_key"],
