@@ -8,24 +8,24 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
-from scalp_lite.plotting import plot_embedding_pair
+from clasp.plotting import plot_embedding_pair
 
 
 def test_plot_embedding_pair_returns_two_axes(toy_adata):
-    toy_adata.obsm["X_scalp"] = toy_adata.X[:, :2]
+    toy_adata.obsm["X_clasp"] = toy_adata.X[:, :2]
 
-    axes = plot_embedding_pair(toy_adata, embedding_key="X_scalp", batch_key="batch", label_key="label")
+    axes = plot_embedding_pair(toy_adata, embedding_key="X_clasp", batch_key="batch", label_key="label")
 
     assert len(axes) == 2
-    assert axes[0].get_title() == "X_scalp by batch"
-    assert axes[1].get_title() == "X_scalp by label"
+    assert axes[0].get_title() == "X_clasp by batch"
+    assert axes[1].get_title() == "X_clasp by label"
     plt.close(axes[0].figure)
 
 
 def test_plot_embedding_pair_uses_distinct_default_palettes(toy_adata):
-    toy_adata.obsm["X_scalp"] = toy_adata.X[:, :2]
+    toy_adata.obsm["X_clasp"] = toy_adata.X[:, :2]
 
-    axes = plot_embedding_pair(toy_adata, embedding_key="X_scalp", batch_key="batch", label_key="label")
+    axes = plot_embedding_pair(toy_adata, embedding_key="X_clasp", batch_key="batch", label_key="label")
 
     batch_color = axes[0].collections[0].get_facecolors()[0]
     label_color = axes[1].collections[0].get_facecolors()[0]
@@ -34,11 +34,11 @@ def test_plot_embedding_pair_uses_distinct_default_palettes(toy_adata):
 
 
 def test_plot_embedding_pair_shuffles_draw_order_in_sync(toy_adata):
-    toy_adata.obsm["X_scalp"] = np.column_stack([np.arange(toy_adata.n_obs), np.zeros(toy_adata.n_obs)])
+    toy_adata.obsm["X_clasp"] = np.column_stack([np.arange(toy_adata.n_obs), np.zeros(toy_adata.n_obs)])
 
     axes = plot_embedding_pair(
         toy_adata,
-        embedding_key="X_scalp",
+        embedding_key="X_clasp",
         batch_key="batch",
         label_key="label",
         shuffle=True,
@@ -55,11 +55,11 @@ def test_plot_embedding_pair_shuffles_draw_order_in_sync(toy_adata):
 
 
 def test_plot_embedding_pair_uses_larger_legend_markers(toy_adata):
-    toy_adata.obsm["X_scalp"] = toy_adata.X[:, :2]
+    toy_adata.obsm["X_clasp"] = toy_adata.X[:, :2]
 
     axes = plot_embedding_pair(
         toy_adata,
-        embedding_key="X_scalp",
+        embedding_key="X_clasp",
         batch_key="batch",
         label_key="label",
         legend_markerscale=3.0,
@@ -71,7 +71,7 @@ def test_plot_embedding_pair_uses_larger_legend_markers(toy_adata):
 
 
 def test_plot_embedding_pair_rejects_missing_label(toy_adata):
-    toy_adata.obsm["X_scalp"] = toy_adata.X[:, :2]
+    toy_adata.obsm["X_clasp"] = toy_adata.X[:, :2]
 
     with pytest.raises(KeyError, match="missing"):
-        plot_embedding_pair(toy_adata, embedding_key="X_scalp", batch_key="batch", label_key="missing")
+        plot_embedding_pair(toy_adata, embedding_key="X_clasp", batch_key="batch", label_key="missing")

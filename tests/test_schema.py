@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from scalp_lite.io import AnnDataValidationError, read_h5ad, validate_adata
+from clasp.io import AnnDataValidationError, read_h5ad, validate_adata
 
 
 def test_schema_validation_rejects_missing_batch_key(toy_adata):
@@ -13,5 +13,5 @@ def test_schema_validation_rejects_missing_batch_key(toy_adata):
 
 def test_read_h5ad_rejects_missing_input(tmp_path):
     missing_path = tmp_path / "missing.h5ad"
-    with pytest.raises(FileNotFoundError, match="SCALP_INPUT_H5AD"):
+    with pytest.raises(FileNotFoundError, match="CLASP_INPUT_H5AD"):
         read_h5ad(missing_path)

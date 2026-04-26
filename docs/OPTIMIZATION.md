@@ -1,10 +1,10 @@
 # Latent Bayesian Optimization
 
-SCALP-lite includes an optional hyperparameter optimizer for expensive graph-embedding runs. A single SCALP evaluation can take minutes, so the optimizer avoids direct Bayesian optimization over the full mixed hyperparameter space. Instead, it learns a low-dimensional latent representation of sampled configurations and runs Bayesian optimization there.
+CLASP includes an optional hyperparameter optimizer for expensive graph-embedding runs. A single CLASP evaluation can take minutes, so the optimizer avoids direct Bayesian optimization over the full mixed hyperparameter space. Instead, it learns a low-dimensional latent representation of sampled configurations and runs Bayesian optimization there.
 
 The implementation lives in:
 
-- `src/scalp_lite/optimization/latent_bo.py`
+- `src/clasp/optimization/latent_bo.py`
 - `notebooks/01_latent_bayesopt.ipynb`
 
 The optional dependencies are installed with:
@@ -44,7 +44,7 @@ $$
 q \ll d
 $$
 
-Bayesian optimization then works on `z`, and proposed latent points are decoded back to valid SCALP parameters.
+Bayesian optimization then works on `z`, and proposed latent points are decoded back to valid CLASP parameters.
 
 ## Search Space
 
@@ -96,7 +96,7 @@ $$
 f(x) \rightarrow y
 $$
 
-where `x` is a SCALP parameter configuration and `y` is the validation score. The latent model learns:
+where `x` is a CLASP parameter configuration and `y` is the validation score. The latent model learns:
 
 $$
 z \mapsto x
@@ -144,7 +144,7 @@ result = latent_bayesopt(
 
 ## Objective Used In The Notebook
 
-`notebooks/01_latent_bayesopt.ipynb` defines a SCALP objective that:
+`notebooks/01_latent_bayesopt.ipynb` defines a CLASP objective that:
 
 1. Copies a preprocessed `AnnData`.
 2. Embeds it with candidate graph parameters.
@@ -182,11 +182,11 @@ This favors biological label coherence, modest batch mixing, and less dense grap
 
 ## Current Limitations
 
-- The objective still runs full SCALP embedding, so optimization is expensive.
+- The objective still runs full CLASP embedding, so optimization is expensive.
 - GPLVM refitting is heavier than PCA and should be used only after validating the search space.
 - The optimizer assumes larger scores are better.
 - Duplicate decoded configurations are currently allowed.
-- Cross-batch assignment in SCALP still uses dense Hungarian costs, so very large datasets should use small `max_cells` during optimization.
+- Cross-batch assignment in CLASP still uses dense Hungarian costs, so very large datasets should use small `max_cells` during optimization.
 
 ## Recommended Usage
 

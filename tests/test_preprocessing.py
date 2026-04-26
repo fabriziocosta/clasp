@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scalp_lite.preprocessing import ensure_pca, split_batches
+from clasp.preprocessing import ensure_pca, split_batches
 
 
 def test_pca_is_created_when_missing(toy_adata):

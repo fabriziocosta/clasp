@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from scalp_lite.optimization import latent_bayesopt
+from clasp.optimization import latent_bayesopt
 
 
 def test_latent_bayesopt_pca_runs_on_mixed_space():

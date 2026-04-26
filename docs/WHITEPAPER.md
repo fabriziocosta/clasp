@@ -1,8 +1,10 @@
-# SCALP-lite Whitepaper
+# CLASP Whitepaper
 
 ## Summary
 
-SCALP-lite is a compact implementation of a graph-based strategy for integrating single-cell datasets across batches, donors, technologies, time points, or related biological conditions. The central idea is to build a cell-cell graph that preserves local neighborhoods inside each batch while adding sparse, globally optimized links across batches.
+**CLASP** stands for **Cell integration via Linear Assignment and Sparse Pairing**.
+
+CLASP is a compact implementation of a graph-based strategy for integrating single-cell datasets across batches, donors, technologies, time points, or related biological conditions. The central idea is to build a cell-cell graph that preserves local neighborhoods inside each batch while adding sparse, globally optimized links across batches.
 
 The method is intentionally simple:
 
@@ -19,7 +21,7 @@ This design avoids directly forcing all cells into the same coordinates during g
 
 Single-cell RNA-seq datasets often contain technical and biological variation that is confounded with batch labels. Standard batch correction works well when batches are replicates with high cell-type overlap, but harder cases arise when batches are time points, developmental stages, disease states, species, or technologies.
 
-In those harder cases, fully mixing all batches can be wrong: some cells should align, while distinct biological states should remain separate. SCALP-lite addresses this by adding cross-batch links sparsely and globally. The Hungarian assignment step prevents one popular cell from becoming the nearest neighbor of many cells in another batch, while the distance cutoff removes weak assignments that likely represent non-overlapping biology.
+In those harder cases, fully mixing all batches can be wrong: some cells should align, while distinct biological states should remain separate. CLASP addresses this by adding cross-batch links sparsely and globally. The Hungarian assignment step prevents one popular cell from becoming the nearest neighbor of many cells in another batch, while the distance cutoff removes weak assignments that likely represent non-overlapping biology.
 
 ## Data Model
 
@@ -35,7 +37,7 @@ Optional fields:
 - `adata.obs[label_key]`: biological label used for evaluation and plotting.
 - `adata.obsm[rep_key]`: precomputed representation, usually `X_pca`.
 
-SCALP-lite works on `adata.obsm[rep_key]`. If that representation is missing, the project provides `ensure_pca()` to compute it from `adata.X`.
+CLASP works on `adata.obsm[rep_key]`. If that representation is missing, the project provides `ensure_pca()` to compute it from `adata.X`.
 
 ## Algorithm
 
@@ -57,11 +59,11 @@ where `n` is the total number of cells across all batches.
 
 ### Within-Batch Graph
 
-For each batch, SCALP-lite builds a symmetric k-nearest-neighbor graph. These blocks preserve local biological structure inside a batch. By default, nearest-neighbor search uses hubness-corrected distances rather than raw Euclidean distances, and within-batch edges are retained only when the neighbor relation is mutual.
+For each batch, CLASP builds a symmetric k-nearest-neighbor graph. These blocks preserve local biological structure inside a batch. By default, nearest-neighbor search uses hubness-corrected distances rather than raw Euclidean distances, and within-batch edges are retained only when the neighbor relation is mutual.
 
 ### Hubness Correction
 
-High-dimensional nearest-neighbor graphs often contain hubs: cells that appear as neighbors of many other cells because of geometry rather than biology. Following the SCALP paper, SCALP-lite uses Cross-domain Similarity Local Scaling (CSLS) to correct pairwise distances before neighbor selection and cross-batch assignment.
+High-dimensional nearest-neighbor graphs often contain hubs: cells that appear as neighbors of many other cells because of geometry rather than biology. Following the CLASP paper, CLASP uses Cross-domain Similarity Local Scaling (CSLS) to correct pairwise distances before neighbor selection and cross-batch assignment.
 
 For a distance matrix `D` between domains `A` and `B`, define the local scale of a cell as its mean distance to the `k_csls` nearest cells in the opposite domain:
 
@@ -96,7 +98,7 @@ $$
 
 where `tilde D` is the non-negative shifted corrected distance used only for edge weighting. Neighbor selection and assignment use the unshifted corrected distance.
 
-SCALP-lite can also binarize retained edges:
+CLASP can also binarize retained edges:
 
 $$
 w_{uv} = 1
@@ -113,7 +115,7 @@ k_{\mathrm{total}} \cdot \rho_{\mathrm{intra}}
 \right\rceil
 $$
 
-Rather than selecting neighbors directly by corrected distance, SCALP-lite defaults to rank-based neighbor selection. For each cell, corrected distances are converted into row-wise ranks:
+Rather than selecting neighbors directly by corrected distance, CLASP defaults to rank-based neighbor selection. For each cell, corrected distances are converted into row-wise ranks:
 
 $$
 R_{uv} =
@@ -150,7 +152,7 @@ Mutual neighbors reduce one-sided high-dimensional nearest-neighbor artifacts an
 
 ### Cross-Batch Graph
 
-For each pair of batches, SCALP-lite computes all pairwise distances, applies the configured hubness correction, and solves a linear assignment problem:
+For each pair of batches, CLASP computes all pairwise distances, applies the configured hubness correction, and solves a linear assignment problem:
 
 $$
 \min_{\pi}
@@ -194,7 +196,7 @@ The graph is optionally symmetrized and diagonal entries are removed.
 ## Pseudocode
 
 ```text
-function BUILD_SCALP_GRAPH(
+function BUILD_CLASP_GRAPH(
     adata,
     rep_key = "X_pca",
     batch_key = "batch",
@@ -252,7 +254,7 @@ function BUILD_SCALP_GRAPH(
         G = elementwise_max(G, transpose(G))
         remove diagonal entries from G
 
-    store graph metadata in adata.uns["scalp_lite"]["graph"]
+    store graph metadata in adata.uns["clasp"]["graph"]
     return G
 ```
 
@@ -371,7 +373,7 @@ The most important tradeoff is controlled by the cross-batch filtering threshold
 
 ## Evaluation
 
-SCALP-lite supports graph and embedding evaluation through metrics such as:
+CLASP supports graph and embedding evaluation through metrics such as:
 
 - batch mixing in embedding neighborhoods
 - batch silhouette
@@ -384,7 +386,7 @@ For a quick smoke test, the notebooks use PBMC3k with artificial batches. For a 
 
 ## Limitations
 
-SCALP-lite is designed to be readable and dependency-light, not exhaustive.
+CLASP is designed to be readable and dependency-light, not exhaustive.
 
 Current limitations:
 
@@ -401,7 +403,7 @@ load .h5ad
 validate AnnData schema
 normalize expression and select highly variable genes
 ensure PCA representation exists
-build SCALP-lite graph
+build CLASP graph
 embed graph with UMAP or spectral embedding
 plot by batch and label
 score embedding quality
@@ -410,7 +412,7 @@ save embedded .h5ad
 
 For paired batch/label plots, cells are drawn in a reproducible random order while keeping coordinates and labels synchronized. This avoids a misleading overlay when the AnnData rows are ordered by batch or cell type and many points occupy a crowded region.
 
-The object-oriented entry point for this workflow is `ScalpEstimator`. Its `preprocess()` method uses Scanpy's `normalize_total`, `log1p`, `filter_genes`, and `highly_variable_genes` when Scanpy is installed, matching the standard preprocessing pattern used in the original `cellsaw` codebase. A variance-based selector is kept as a lightweight fallback.
+The object-oriented entry point for this workflow is `ClaspEstimator`. Its `preprocess()` method uses Scanpy's `normalize_total`, `log1p`, `filter_genes`, and `highly_variable_genes` when Scanpy is installed, matching the standard preprocessing pattern used in the original `cellsaw` codebase. A variance-based selector is kept as a lightweight fallback.
 
 This workflow is implemented in:
 

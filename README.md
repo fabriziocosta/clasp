@@ -1,6 +1,8 @@
-# scalp-lite
+# clasp
 
-`scalp-lite` is a small, dependency-light reimplementation of the core SCALP idea: integrate batches of single-cell data by combining within-batch nearest-neighbor edges with cross-batch Hungarian assignment edges, then embed and score the resulting graph.
+**CLASP** stands for **Cell integration via Linear Assignment and Sparse Pairing**.
+
+`clasp` is a small, dependency-light implementation of the CLASP idea: integrate batches of single-cell data by combining within-batch nearest-neighbor edges with cross-batch Hungarian assignment edges, then embed and score the resulting graph.
 
 It intentionally avoids the legacy research dependencies from the original `cellsaw` repository. The required interface is an in-memory `AnnData` object or a `.h5ad` file.
 
@@ -15,13 +17,13 @@ UMAP is optional. If `umap-learn` is not installed, `embed_graph(method="auto")`
 ## Quick Start
 
 ```python
-from scalp_lite import (
-    ScalpEstimator,
+from clasp import (
+    ClaspEstimator,
     score_embedding,
 )
 
 # batch_key is the technical batch/sample/time column; label_key is the biological cell-type column.
-estimator = ScalpEstimator(batch_key="batch", label_key="label")
+estimator = ClaspEstimator(batch_key="batch", label_key="label")
 adata = estimator.to_data("input.h5ad")
 adata = estimator.preprocess(
     adata,
@@ -84,16 +86,16 @@ graph = estimator.data_to_graph(
     # Symmetrize the final graph.
     symmetrize=True,
 )
-adata.obsm["X_scalp"] = estimator.graph_to_vector(graph)
-scores = score_embedding(adata, embedding_key="X_scalp", batch_key="batch", label_key="label", graph=graph)
+adata.obsm["X_clasp"] = estimator.graph_to_vector(graph)
+scores = score_embedding(adata, embedding_key="X_clasp", batch_key="batch", label_key="label", graph=graph)
 
-estimator.plot(adata, embedding_key="X_scalp")
-estimator.save(adata, "scalp_lite_embedded.h5ad")
+estimator.plot(adata, embedding_key="X_clasp")
+estimator.save(adata, "clasp_embedded.h5ad")
 ```
 
 `estimator.plot` uses a viridis palette for batches and a categorical `tab20` palette for labels by default. It shuffles the draw order reproducibly so ordered labels or batches do not hide mixing in crowded regions.
 
-`ScalpEstimator.preprocess` follows the standard single-cell preprocessing pattern used by the original project: optionally filter cells and genes, normalize each cell to `target_sum`, optionally apply `log1p`, select highly variable genes with `scanpy.pp.highly_variable_genes`, and compute PCA.
+`ClaspEstimator.preprocess` follows the standard single-cell preprocessing pattern used by the original project: optionally filter cells and genes, normalize each cell to `target_sum`, optionally apply `log1p`, select highly variable genes with `scanpy.pp.highly_variable_genes`, and compute PCA.
 
 ## AnnData Schema
 
@@ -110,11 +112,12 @@ Optional:
 ## Notebooks
 
 - `notebooks/00_download_datasets.ipynb`: download registered `.h5ad` datasets into `data/`.
+- `notebooks/01_integrated_pipeline.ipynb`: tune parameters, save them, embed, save the embedded AnnData file, and plot in one workflow.
 - `notebooks/01_latent_bayesopt.ipynb`: optimize preprocessing PCA and graph parameters, then save them to `data/optimized_params/`.
 - `notebooks/02_visualize_embedding.ipynb`: load optimized preprocessing and graph parameters, embed in 2D, plot, and save the embedded AnnData.
 - `notebooks/03_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
 - `notebooks/04_assignment_quantile_sweep.ipynb`: sweep graph parameters around the optimized baseline.
 
-The notebooks default to `data/pancreas_normalized.h5ad`, a real batch-integration example with five pancreas studies/platforms in `obs["study"]` and curated cell types in `obs["cell_type"]`. The optimization notebook writes optimized graph parameters, the visualization notebook writes `data/pancreas_normalized-scalp.h5ad`, and the evaluation notebook then reads that embedded file.
+The notebooks default to `data/pancreas_normalized.h5ad`, a real batch-integration example with five pancreas studies/platforms in `obs["study"]` and curated cell types in `obs["cell_type"]`. The optimization notebook writes optimized graph parameters, the visualization notebook writes `data/pancreas_normalized-clasp.h5ad`, and the evaluation notebook then reads that embedded file.
 
 To switch datasets, edit `selected_dataset` in the first notebook cell. Available local choices are `pancreas`, `zebrafish`, and `pbmc3k`.

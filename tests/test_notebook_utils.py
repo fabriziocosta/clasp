@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scalp_lite.notebook_utils import (
+from clasp.notebook_utils import (
     DOWNLOAD_REGISTRY,
     PAPER_DATASET_DOWNLOADS,
     PAPER_DATASETS_REQUIRING_MANUAL_CURATION,
@@ -163,7 +163,7 @@ def test_dataset_config_accepts_download_registry_entries(tmp_path):
     dataset = dataset_config("scib_pancreas", project_root=tmp_path)
 
     assert dataset["input_path"] == tmp_path / "data" / "human_pancreas_norm_complexBatch.h5ad"
-    assert dataset["output_path"] == tmp_path / "data" / "human_pancreas_norm_complexBatch-scalp.h5ad"
+    assert dataset["output_path"] == tmp_path / "data" / "human_pancreas_norm_complexBatch-clasp.h5ad"
     assert dataset["batch_key"] == "tech"
     assert dataset["label_key"] == "celltype"
     assert dataset["preprocess"]["normalize"] is False

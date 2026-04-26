@@ -6,9 +6,10 @@ import pytest
 from anndata import AnnData
 from scipy import sparse
 
-from scalp_lite.graph import GraphParams, build_inter_batch_graph, build_intra_batch_graph, build_scalp_graph
-from scalp_lite.graph.hubness import csls_distances, edge_weights, rank_distances
-from scalp_lite.preprocessing import ensure_pca
+from clasp.graph import GraphParams, build_inter_batch_graph, build_intra_batch_graph, build_clasp_graph
+from clasp.graph.inter import _iterated_assignment
+from clasp.graph.hubness import csls_distances, edge_weights, rank_distances
+from clasp.preprocessing import ensure_pca
 
 
 def test_intra_batch_graph_has_expected_shape_and_no_cross_batch_edges():
@@ -69,6 +70,21 @@ def test_inter_batch_graph_coerces_integral_float_edge_count():
 
     assert graph.shape == (5, 6)
     assert graph.nnz > 0
+
+
+def test_inter_batch_graph_skips_infeasible_nonfinite_assignment_edges():
+    distances = np.array(
+        [
+            [1.0, np.inf, np.inf],
+            [np.inf, np.inf, np.inf],
+            [np.inf, 2.0, np.inf],
+        ]
+    )
+
+    rows, cols, vals = _iterated_assignment(distances, n_repeats=2)
+
+    assert set(zip(rows, cols)) == {(0, 0), (2, 1)}
+    np.testing.assert_array_equal(np.sort(vals), np.array([1.0, 2.0]))
 
 
 def test_hungarian_inter_batch_graph_creates_cross_batch_edges():
@@ -186,13 +202,13 @@ def test_binary_edge_weighting_is_available_for_graph_builders():
 
 def test_final_graph_is_sparse_square_symmetric_and_zero_diagonal(toy_adata):
     ensure_pca(toy_adata, n_components=6)
-    graph = build_scalp_graph(toy_adata, n_neighbors=6, intra_fraction=0.5, assignment_quantile=1.0)
+    graph = build_clasp_graph(toy_adata, n_neighbors=6, intra_fraction=0.5, assignment_quantile=1.0)
     assert sparse.isspmatrix_csr(graph)
     assert graph.shape == (toy_adata.n_obs, toy_adata.n_obs)
     assert (graph - graph.T).nnz == 0
     assert graph.diagonal().sum() == 0
     assert graph.nnz > 0
-    assert "scalp_lite" in toy_adata.uns
+    assert "clasp" in toy_adata.uns
 
 
 def test_final_graph_preserves_original_observation_order_for_interleaved_batches():
@@ -209,7 +225,7 @@ def test_final_graph_preserves_original_observation_order_for_interleaved_batche
         ]
     )
 
-    graph = build_scalp_graph(
+    graph = build_clasp_graph(
         adata,
         n_neighbors=1,
         intra_fraction=1.0,
