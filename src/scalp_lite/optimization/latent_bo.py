@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
+import contextlib
 import warnings
 
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
+
+warnings.filterwarnings("ignore", message="Found Intel OpenMP .* LLVM OpenMP .*", category=RuntimeWarning)
 
 
 def _require_botorch():
@@ -251,24 +254,63 @@ def _fit_latent_model(X: np.ndarray, *, latent_dim: int, embedding_model: str, r
     raise ValueError("embedding_model must be one of: 'pca', 'gplvm'.")
 
 
+@dataclass(frozen=True)
+class LatentScaler:
+    lo: np.ndarray
+    width: np.ndarray
+
+    @classmethod
+    def fit(cls, Z: np.ndarray) -> "LatentScaler":
+        lo = Z.min(axis=0)
+        hi = Z.max(axis=0)
+        width = np.maximum(hi - lo, 1e-12)
+        return cls(lo=lo, width=width)
+
+    def transform(self, Z: np.ndarray) -> np.ndarray:
+        return np.clip((Z - self.lo) / self.width, 0.0, 1.0)
+
+    def inverse_transform(self, Z_scaled: np.ndarray) -> np.ndarray:
+        return Z_scaled * self.width + self.lo
+
+
+@contextlib.contextmanager
+def _suppress_known_bo_noise():
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Data \\(input features\\) is not contained to the unit cube.*")
+        warnings.filterwarnings("ignore", message="Found Intel OpenMP .* LLVM OpenMP .*", category=RuntimeWarning)
+        yield
+
+
 def _fit_surrogate(Z: np.ndarray, Y: np.ndarray):
     deps = _require_botorch()
     torch = deps["torch"]
     train_X = torch.as_tensor(Z, dtype=torch.double)
     train_Y = torch.as_tensor(Y.reshape(-1, 1), dtype=torch.double)
-    model = deps["SingleTaskGP"](train_X, train_Y, outcome_transform=deps["Standardize"](m=1))
-    mll = deps["ExactMarginalLogLikelihood"](model.likelihood, model)
-    deps["fit_gpytorch_mll"](mll)
+    with _suppress_known_bo_noise():
+        model = deps["SingleTaskGP"](train_X, train_Y, outcome_transform=deps["Standardize"](m=1))
+        mll = deps["ExactMarginalLogLikelihood"](model.likelihood, model)
+        deps["fit_gpytorch_mll"](mll)
     return model
 
 
-def _latent_bounds(Z: np.ndarray, *, margin: float = 0.25):
+def _as_score(value, *, penalty: float) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        warnings.warn(f"Objective returned a non-numeric score {value!r}; using penalty {penalty}.", RuntimeWarning)
+        return float(penalty)
+    if not np.isfinite(score):
+        warnings.warn(f"Objective returned a non-finite score {score!r}; using penalty {penalty}.", RuntimeWarning)
+        return float(penalty)
+    return score
+
+
+def _latent_bounds(Z: np.ndarray, *, margin: float = 0.05):
     deps = _require_botorch()
     torch = deps["torch"]
-    lo = Z.min(axis=0)
-    hi = Z.max(axis=0)
-    width = np.maximum(hi - lo, 1.0)
-    bounds = np.vstack([lo - margin * width, hi + margin * width])
+    lo = np.zeros(Z.shape[1], dtype=float) - margin
+    hi = np.ones(Z.shape[1], dtype=float) + margin
+    bounds = np.vstack([lo, hi])
     return torch.as_tensor(bounds, dtype=torch.double)
 
 
@@ -283,14 +325,15 @@ def _propose_latent(Z: np.ndarray, Y: np.ndarray, *, surrogate_model, acquisitio
     else:
         raise ValueError("acquisition must be one of: 'ei', 'ucb'.")
     try:
-        candidates, _ = deps["optimize_acqf"](
-            acq,
-            bounds=bounds,
-            q=batch_size,
-            num_restarts=10,
-            raw_samples=128,
-            options={"seed": random_state},
-        )
+        with _suppress_known_bo_noise():
+            candidates, _ = deps["optimize_acqf"](
+                acq,
+                bounds=bounds,
+                q=batch_size,
+                num_restarts=10,
+                raw_samples=128,
+                options={"seed": random_state},
+            )
         return candidates.detach().cpu().numpy()
     except Exception as exc:
         warnings.warn(f"Acquisition optimization failed; sampling latent candidates randomly. Original error: {exc}", RuntimeWarning)
@@ -309,6 +352,7 @@ def latent_bayesopt(
     acquisition: str = "ei",
     batch_size: int = 1,
     random_state: int = 0,
+    invalid_score: float = -1e9,
 ):
     """Expensive hyperparameter optimization through Bayesian optimization in latent space."""
     if n_initial < max(2, latent_dim + 1):
@@ -322,7 +366,7 @@ def latent_bayesopt(
 
     params_history = [encoded_space.sample_params(rng) for _ in range(n_initial)]
     observed_points = [encoded_space.encode(params) for params in params_history]
-    observed_scores = [float(objective_fn(params)) for params in params_history]
+    observed_scores = [_as_score(objective_fn(params), penalty=invalid_score) for params in params_history]
     history_rows = [
         {"iteration": 0, "phase": "initial", "score": score, **params}
         for params, score in zip(params_history, observed_scores)
@@ -335,19 +379,22 @@ def latent_bayesopt(
         Y = np.asarray(observed_scores, dtype=float)
         latent_model = _fit_latent_model(X, latent_dim=latent_dim, embedding_model=embedding_model, random_state=random_state + iteration)
         Z = latent_model.encode(X)
-        surrogate_model = _fit_surrogate(Z, Y)
-        z_candidates = _propose_latent(
-            Z,
+        latent_scaler = LatentScaler.fit(Z)
+        Z_scaled = latent_scaler.transform(Z)
+        surrogate_model = _fit_surrogate(Z_scaled, Y)
+        z_scaled_candidates = _propose_latent(
+            Z_scaled,
             Y,
             surrogate_model=surrogate_model,
             acquisition=acquisition,
             batch_size=batch_size,
             random_state=random_state + iteration,
         )
+        z_candidates = latent_scaler.inverse_transform(z_scaled_candidates)
         decoded = np.clip(latent_model.decode(z_candidates), 0.0, 1.0)
         for decoded_vector in decoded:
             params = encoded_space.decode(decoded_vector)
-            score = float(objective_fn(params))
+            score = _as_score(objective_fn(params), penalty=invalid_score)
             params_history.append(params)
             observed_points.append(encoded_space.encode(params))
             observed_scores.append(score)
@@ -359,7 +406,7 @@ def latent_bayesopt(
         latent_model = _fit_latent_model(X, latent_dim=latent_dim, embedding_model=embedding_model, random_state=random_state)
     Z = latent_model.encode(X)
     if surrogate_model is None:
-        surrogate_model = _fit_surrogate(Z, Y)
+        surrogate_model = _fit_surrogate(LatentScaler.fit(Z).transform(Z), Y)
 
     best_index = int(np.argmax(Y))
     return {
