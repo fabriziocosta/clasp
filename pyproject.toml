@@ -18,6 +18,7 @@ dependencies = [
   "seaborn>=0.12",
   "jupyter>=1.0",
   "scanpy>=1.9",
+  "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +28,9 @@ dev = ["pytest>=7", "nbformat>=5"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+scalp_lite = ["datasets/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

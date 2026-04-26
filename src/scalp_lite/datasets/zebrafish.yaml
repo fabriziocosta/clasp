@@ -1,0 +1,28 @@
+name: zebrafish
+input: data/cellrank-zebrafish.h5ad
+embedded: data/cellrank-zebrafish-scalp.h5ad
+batch_key: Stage
+label_key: lineages
+source: https://cellrank.readthedocs.io/en/latest/api/_autosummary/datasets/cellrank.datasets.zebrafish.html
+paper_group: development/time series
+download:
+  kind: url
+  filename: cellrank-zebrafish.h5ad
+  url: https://ndownloader.figshare.com/files/27265280
+  function: zebrafish
+preprocess:
+  normalize: false
+  hvg_flavor: variance
+  create_artificial_batch: false
+graph:
+  n_neighbors: 30
+  intra_fraction: 0.5
+  n_inter_edges: 1
+  assignment_quantile: 0.75
+  hubness_correction: csls
+  hubness_k: 10
+  rank_correction: true
+  edge_weighting: distance
+  mutual_neighbors: false
+  neighbor_mode: distance
+  symmetrize: true

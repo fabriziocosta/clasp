@@ -5,11 +5,13 @@ from scalp_lite.notebook_utils import (
     PAPER_DATASET_DOWNLOADS,
     PAPER_DATASETS_REQUIRING_MANUAL_CURATION,
     dataset_config,
+    list_dataset_config_files,
     load_optimized_graph_params,
     make_compact_search_space,
     optimization_search_space,
     optimized_params_path,
     paper_dataset_manifest,
+    read_dataset_spec,
     save_best_optimization_result,
     save_optimized_graph_params,
     split_optimization_params,
@@ -166,3 +168,16 @@ def test_dataset_config_accepts_download_registry_entries(tmp_path):
     assert dataset["label_key"] == "celltype"
     assert dataset["preprocess"]["normalize"] is False
     assert dataset["graph"]["hubness_correction"] == "csls"
+
+
+def test_dataset_configs_are_loaded_from_yaml():
+    files = list_dataset_config_files()
+    names = {path.stem for path in files}
+
+    assert "scib_pancreas" in names
+    assert set(DOWNLOAD_REGISTRY).issubset(names)
+
+    spec = read_dataset_spec("scib_pancreas")
+    assert spec["batch_key"] == "tech"
+    assert spec["label_key"] == "celltype"
+    assert spec["download"]["filename"] == "human_pancreas_norm_complexBatch.h5ad"

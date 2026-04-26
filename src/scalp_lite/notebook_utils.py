@@ -15,6 +15,7 @@ import anndata as ad
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import yaml
 
 from scalp_lite.estimator import ScalpEstimator
 from scalp_lite.metrics import score_embedding
@@ -270,6 +271,86 @@ PAPER_DATASETS_REQUIRING_MANUAL_CURATION = [
         "reason": "The SCALP PDF names the biological datasets but does not provide direct h5ad files or a machine-readable manifest.",
     },
 ]
+
+
+def dataset_yaml_dir() -> Path:
+    return Path(__file__).with_name("datasets")
+
+
+def list_dataset_config_files(config_dir: str | Path | None = None) -> list[Path]:
+    config_dir = dataset_yaml_dir() if config_dir is None else Path(config_dir)
+    return sorted(config_dir.glob("*.yaml"))
+
+
+def read_dataset_spec(name: str, *, config_dir: str | Path | None = None) -> dict:
+    path = (dataset_yaml_dir() if config_dir is None else Path(config_dir)) / f"{name}.yaml"
+    if not path.exists():
+        available = [item.stem for item in list_dataset_config_files(config_dir)]
+        raise KeyError(f"Unknown dataset {name!r}. Available datasets: {available}")
+    with open(path) as handle:
+        spec = yaml.safe_load(handle)
+    if not isinstance(spec, dict):
+        raise ValueError(f"Dataset config must be a mapping: {path}")
+    if spec.get("name") != name:
+        raise ValueError(f"Dataset config {path} has name={spec.get('name')!r}; expected {name!r}.")
+    return spec
+
+
+def load_dataset_specs(config_dir: str | Path | None = None) -> dict[str, dict]:
+    specs = {}
+    for path in list_dataset_config_files(config_dir):
+        with open(path) as handle:
+            spec = yaml.safe_load(handle)
+        if not isinstance(spec, dict) or "name" not in spec:
+            raise ValueError(f"Dataset config must contain a name: {path}")
+        if spec["name"] in specs:
+            raise ValueError(f"Duplicate dataset config name: {spec['name']!r}")
+        specs[spec["name"]] = spec
+    return specs
+
+
+def _dataset_entry_from_spec(spec: dict) -> dict:
+    required = ("input", "embedded", "batch_key", "label_key")
+    missing = [key for key in required if key not in spec]
+    if missing:
+        raise ValueError(f"Dataset config {spec.get('name')!r} is missing keys: {missing}")
+    return {
+        "input": spec["input"],
+        "embedded": spec["embedded"],
+        "batch_key": spec["batch_key"],
+        "label_key": spec["label_key"],
+        "source": spec.get("source"),
+        "paper_group": spec.get("paper_group"),
+        "preprocess": spec.get("preprocess", {}).copy(),
+        "graph": spec.get("graph", {}).copy(),
+    }
+
+
+def _download_entry_from_spec(spec: dict) -> dict:
+    download = spec.get("download", {}).copy()
+    if not download:
+        return {}
+    if "filename" not in download:
+        download["filename"] = Path(spec["input"]).name
+    download["batch_key"] = spec["batch_key"]
+    download["label_key"] = spec["label_key"]
+    download["source"] = spec.get("source")
+    download["paper_group"] = spec.get("paper_group")
+    return download
+
+
+def _registries_from_dataset_specs() -> tuple[dict[str, dict], dict[str, dict]]:
+    specs = load_dataset_specs()
+    dataset_registry = {name: _dataset_entry_from_spec(spec) for name, spec in specs.items()}
+    download_registry = {
+        name: download
+        for name, spec in specs.items()
+        if (download := _download_entry_from_spec(spec))
+    }
+    return dataset_registry, download_registry
+
+
+DATASET_REGISTRY, DOWNLOAD_REGISTRY = _registries_from_dataset_specs()
 
 
 def resolve_project_root(start: Path | None = None) -> Path:
