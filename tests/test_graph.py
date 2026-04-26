@@ -7,7 +7,7 @@ from anndata import AnnData
 from scipy import sparse
 
 from scalp_lite.graph import GraphParams, build_inter_batch_graph, build_intra_batch_graph, build_scalp_graph
-from scalp_lite.graph.hubness import csls_distances, edge_weights
+from scalp_lite.graph.hubness import csls_distances, edge_weights, rank_distances
 from scalp_lite.preprocessing import ensure_pca
 
 
@@ -33,10 +33,10 @@ def test_intra_batch_graph_uses_mutual_neighbors_by_default():
     assert non_mutual[2, 1] > 0
 
 
-def test_intra_batch_graph_accepts_rank_neighbor_mode():
+def test_intra_batch_graph_accepts_rank_correction():
     X = np.random.default_rng(4).normal(size=(12, 5))
 
-    graph = build_intra_batch_graph(X, n_neighbors=3, neighbor_mode="rank")
+    graph = build_intra_batch_graph(X, n_neighbors=3, rank_correction=True)
 
     assert graph.shape == (12, 12)
     assert sparse.isspmatrix_csr(graph)
@@ -44,7 +44,7 @@ def test_intra_batch_graph_accepts_rank_neighbor_mode():
 
 
 def test_graph_params_validate_and_coerce_integral_values():
-    params = GraphParams(n_neighbors=5.0, n_inter_edges=2.0, hubness_k=3.0)
+    params = GraphParams(n_neighbors=5.0, n_inter_edges=2.0, hubness_k=3.0, rank_correction=True)
 
     assert params.n_neighbors == 5
     assert isinstance(params.n_neighbors, int)
@@ -52,6 +52,7 @@ def test_graph_params_validate_and_coerce_integral_values():
     assert isinstance(params.n_inter_edges, int)
     assert params.hubness_k == 3
     assert isinstance(params.hubness_k, int)
+    assert params.rank_correction is True
 
 
 def test_graph_params_reject_non_integral_edge_counts():
@@ -98,6 +99,25 @@ def test_csls_distances_apply_local_scaling():
     np.testing.assert_allclose(corrected, expected)
 
 
+def test_rank_distances_sum_row_and_column_ranks():
+    distances = np.array(
+        [
+            [1.0, 10.0, 2.0],
+            [3.0, 2.0, 1.0],
+        ]
+    )
+
+    ranks = rank_distances(distances)
+
+    expected = np.array(
+        [
+            [0.0, 3.0, 2.0],
+            [3.0, 1.0, 0.0],
+        ]
+    )
+    np.testing.assert_allclose(ranks, expected)
+
+
 def test_hubness_correction_is_available_for_inter_batch_graph():
     rng = np.random.default_rng(2)
     left = rng.normal(size=(6, 3))
@@ -116,6 +136,33 @@ def test_hubness_correction_is_available_for_inter_batch_graph():
     assert graph.nnz == 6
     assert np.isfinite(graph.data).all()
     assert np.all(graph.data > 0)
+
+
+def test_rank_correction_changes_inter_batch_assignment_costs():
+    left = np.array([[0.0], [1.0]])
+    right = np.array([[0.2], [0.8]])
+
+    distance_graph = build_inter_batch_graph(
+        left,
+        right,
+        n_inter_edges=1,
+        assignment_quantile=1.0,
+        hubness_correction="none",
+        rank_correction=False,
+        edge_weighting="distance",
+    )
+    rank_graph = build_inter_batch_graph(
+        left,
+        right,
+        n_inter_edges=1,
+        assignment_quantile=1.0,
+        hubness_correction="none",
+        rank_correction=True,
+        edge_weighting="distance",
+    )
+
+    assert distance_graph.nnz == rank_graph.nnz == 2
+    assert not np.allclose(np.sort(distance_graph.data), np.sort(rank_graph.data))
 
 
 def test_binary_edge_weighting_sets_retained_edges_to_one():

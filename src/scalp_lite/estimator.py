@@ -85,9 +85,10 @@ class ScalpEstimator:
     assignment_quantile: float | None = 0.95
     hubness_correction: str = "csls"
     hubness_k: int = 10
+    rank_correction: bool = True
     edge_weighting: str = "distance"
     mutual_neighbors: bool = True
-    neighbor_mode: str = "rank"
+    neighbor_mode: str = "distance"
     symmetrize: bool = True
     n_components: int = 40
     random_state: int = 0
@@ -262,6 +263,7 @@ class ScalpEstimator:
         assignment_quantile: float | None = None,
         hubness_correction: str | None = None,
         hubness_k: int | None = None,
+        rank_correction: bool | None = None,
         edge_weighting: str | None = None,
         mutual_neighbors: bool | None = None,
         neighbor_mode: str | None = None,
@@ -277,6 +279,7 @@ class ScalpEstimator:
         assignment_quantile = self.assignment_quantile if assignment_quantile is None else assignment_quantile
         hubness_correction = self.hubness_correction if hubness_correction is None else hubness_correction
         hubness_k = self.hubness_k if hubness_k is None else hubness_k
+        rank_correction = self.rank_correction if rank_correction is None else rank_correction
         edge_weighting = self.edge_weighting if edge_weighting is None else edge_weighting
         mutual_neighbors = self.mutual_neighbors if mutual_neighbors is None else mutual_neighbors
         neighbor_mode = self.neighbor_mode if neighbor_mode is None else neighbor_mode
@@ -290,6 +293,7 @@ class ScalpEstimator:
             assignment_quantile=assignment_quantile,
             hubness_correction=hubness_correction,
             hubness_k=hubness_k,
+            rank_correction=rank_correction,
             edge_weighting=edge_weighting,
             mutual_neighbors=mutual_neighbors,
             neighbor_mode=neighbor_mode,
@@ -308,6 +312,7 @@ class ScalpEstimator:
             assignment_quantile=params.assignment_quantile,
             hubness_correction=params.hubness_correction,
             hubness_k=params.hubness_k,
+            rank_correction=params.rank_correction,
             edge_weighting=params.edge_weighting,
             mutual_neighbors=params.mutual_neighbors,
             neighbor_mode=params.neighbor_mode,
@@ -348,6 +353,7 @@ class ScalpEstimator:
         assignment_quantile: float | None = None,
         hubness_correction: str | None = None,
         hubness_k: int | None = None,
+        rank_correction: bool | None = None,
         edge_weighting: str | None = None,
         mutual_neighbors: bool | None = None,
         neighbor_mode: str | None = None,
@@ -369,6 +375,7 @@ class ScalpEstimator:
             assignment_quantile=assignment_quantile,
             hubness_correction=hubness_correction,
             hubness_k=hubness_k,
+            rank_correction=rank_correction,
             edge_weighting=edge_weighting,
             mutual_neighbors=mutual_neighbors,
             neighbor_mode=neighbor_mode,

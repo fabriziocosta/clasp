@@ -5,7 +5,7 @@ from scipy import sparse
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
 
-from scalp_lite.graph.hubness import csls_distances, edge_weights
+from scalp_lite.graph.hubness import correct_distances, edge_weights
 from scalp_lite.graph.params import _coerce_int
 
 
@@ -44,6 +44,7 @@ def build_inter_batch_graph(
     assignment_quantile: float | None = 0.95,
     hubness_correction: str = "csls",
     hubness_k: int = 10,
+    rank_correction: bool = True,
     edge_weighting: str = "distance",
 ) -> sparse.csr_matrix:
     """Build a sparse cross-batch graph using repeated Hungarian assignment."""
@@ -53,11 +54,12 @@ def build_inter_batch_graph(
     if shape[0] == 0 or shape[1] == 0 or n_inter_edges <= 0:
         return sparse.csr_matrix(shape, dtype=np.float32)
 
-    distances = pairwise_distances(X_left, X_right, metric=metric)
-    if hubness_correction == "csls":
-        distances = csls_distances(distances, k=hubness_k)
-    elif hubness_correction != "none":
-        raise ValueError("hubness_correction must be one of: 'none', 'csls'.")
+    distances = correct_distances(
+        pairwise_distances(X_left, X_right, metric=metric),
+        hubness_correction=hubness_correction,
+        hubness_k=hubness_k,
+        rank_correction=rank_correction,
+    )
 
     rows, cols, vals = _iterated_assignment(distances, n_inter_edges)
 

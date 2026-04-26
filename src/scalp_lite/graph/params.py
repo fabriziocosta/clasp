@@ -35,9 +35,10 @@ class GraphParams:
     assignment_quantile: float | None = 0.95
     hubness_correction: str = "csls"
     hubness_k: int = 10
+    rank_correction: bool = True
     edge_weighting: str = "distance"
     mutual_neighbors: bool = True
-    neighbor_mode: str = "rank"
+    neighbor_mode: str = "distance"
     symmetrize: bool = True
 
     def __post_init__(self) -> None:
@@ -60,6 +61,8 @@ class GraphParams:
             raise ValueError("metric must be a non-empty string.")
         if self.hubness_correction not in {"none", "csls"}:
             raise ValueError("hubness_correction must be one of: 'none', 'csls'.")
+        if not isinstance(self.rank_correction, bool):
+            raise ValueError("rank_correction must be True or False.")
         if self.edge_weighting not in {"distance", "binary"}:
             raise ValueError("edge_weighting must be one of: 'distance', 'binary'.")
         if self.neighbor_mode not in {"rank", "distance"}:

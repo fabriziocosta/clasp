@@ -34,6 +34,46 @@ def csls_distances(distances: np.ndarray, *, k: int = 10) -> np.ndarray:
     return corrected
 
 
+def rank_distances(distances: np.ndarray) -> np.ndarray:
+    """Return reciprocal rank distances for a 2D distance matrix.
+
+    Lower values remain better. Each entry is the sum of its row-wise rank and
+    column-wise rank, so the transform works for both square within-batch
+    matrices and rectangular cross-batch matrices.
+    """
+    distances = np.asarray(distances, dtype=float)
+    if distances.ndim != 2:
+        raise ValueError("distances must be a 2D matrix.")
+    if distances.size == 0:
+        return distances.copy()
+
+    finite = np.isfinite(distances)
+    row_order = np.argsort(distances, axis=1, kind="mergesort")
+    row_ranks = np.empty_like(row_order, dtype=float)
+    row_ids = np.arange(distances.shape[0])[:, None]
+    row_ranks[row_ids, row_order] = np.arange(distances.shape[1], dtype=float)
+
+    col_order = np.argsort(distances, axis=0, kind="mergesort")
+    col_ranks = np.empty_like(col_order, dtype=float)
+    col_ids = np.arange(distances.shape[1])[None, :]
+    col_ranks[col_order, col_ids] = np.arange(distances.shape[0], dtype=float)[:, None]
+
+    ranks = row_ranks + col_ranks
+    ranks[~finite] = np.inf
+    return ranks
+
+
+def correct_distances(distances: np.ndarray, *, hubness_correction: str = "csls", hubness_k: int = 10, rank_correction: bool = True) -> np.ndarray:
+    """Apply configured distance corrections before graph edge selection."""
+    if hubness_correction == "csls":
+        distances = csls_distances(distances, k=hubness_k)
+    elif hubness_correction != "none":
+        raise ValueError("hubness_correction must be one of: 'none', 'csls'.")
+    if rank_correction:
+        distances = rank_distances(distances)
+    return distances
+
+
 def shifted_distance_weights(distances: np.ndarray) -> np.ndarray:
     """Convert possibly negative corrected distances to positive edge weights."""
     distances = np.asarray(distances, dtype=float)

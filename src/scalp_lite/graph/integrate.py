@@ -25,9 +25,10 @@ def build_scalp_graph(
     assignment_quantile: float | None = 0.95,
     hubness_correction: str = "csls",
     hubness_k: int = 10,
+    rank_correction: bool = True,
     edge_weighting: str = "distance",
     mutual_neighbors: bool = True,
-    neighbor_mode: str = "rank",
+    neighbor_mode: str = "distance",
     symmetrize: bool = True,
 ) -> sparse.csr_matrix:
     """Build the SCALP-lite integrated graph for an AnnData object."""
@@ -39,6 +40,7 @@ def build_scalp_graph(
         assignment_quantile=assignment_quantile,
         hubness_correction=hubness_correction,
         hubness_k=hubness_k,
+        rank_correction=rank_correction,
         edge_weighting=edge_weighting,
         mutual_neighbors=mutual_neighbors,
         neighbor_mode=neighbor_mode,
@@ -63,6 +65,7 @@ def build_scalp_graph(
             metric=params.metric,
             hubness_correction=params.hubness_correction,
             hubness_k=params.hubness_k,
+            rank_correction=params.rank_correction,
             edge_weighting=params.edge_weighting,
             mutual_neighbors=params.mutual_neighbors,
             neighbor_mode=params.neighbor_mode,
@@ -80,6 +83,7 @@ def build_scalp_graph(
                 assignment_quantile=params.assignment_quantile,
                 hubness_correction=params.hubness_correction,
                 hubness_k=params.hubness_k,
+                rank_correction=params.rank_correction,
                 edge_weighting=params.edge_weighting,
             )
             blocks[i][j] = block
