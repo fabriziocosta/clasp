@@ -4,7 +4,10 @@ from pathlib import Path
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 import urllib.request
+import warnings
 
 import anndata as ad
 import matplotlib.pyplot as plt
@@ -212,6 +215,24 @@ def load_optimized_graph_params(
     return json.loads(path.read_text())
 
 
+def install_bo_warning_filters() -> None:
+    warnings.filterwarnings(
+        "ignore",
+        message=r"\s*Found Intel OpenMP .* LLVM OpenMP .*",
+        category=RuntimeWarning,
+        module=r"threadpoolctl",
+    )
+
+
+def ensure_bo_dependencies() -> None:
+    install_bo_warning_filters()
+    try:
+        import botorch  # noqa: F401
+        import gpytorch  # noqa: F401
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", "..[bo]"])
+
+
 def make_estimator(dataset: dict, *, n_components: int = 100, random_state: int = 0) -> ScalpEstimator:
     return ScalpEstimator(
         batch_key=dataset["batch_key"],
@@ -253,6 +274,194 @@ def evaluate_dataset(estimator: ScalpEstimator, dataset: dict, *, embedding_key:
         batch_key=dataset["batch_key"],
         label_key=label_key,
     )
+
+
+def split_optimization_params(
+    params: dict,
+    *,
+    base_preprocess_params: dict,
+    fixed_preprocess_params: dict,
+    base_estimator_params: dict,
+    base_graph_params: dict,
+    preprocess_search_space: dict,
+    estimator_search_space: dict,
+    graph_search_space: dict,
+) -> tuple[dict, dict, dict]:
+    preprocess_params = {
+        **base_preprocess_params,
+        **fixed_preprocess_params,
+        **{key: params[key] for key in preprocess_search_space if key in params},
+    }
+    estimator_params = {
+        **base_estimator_params,
+        **{key: params[key] for key in estimator_search_space if key in params},
+    }
+    graph_params = {
+        **base_graph_params,
+        **{key: params[key] for key in graph_search_space if key in params},
+    }
+    return preprocess_params, estimator_params, graph_params
+
+
+def metric_value(scores, key: str, default: float = 0.0) -> float:
+    value = float(scores.get(key, default))
+    return default if not np.isfinite(value) else value
+
+
+def make_scalp_optimization_objective(
+    *,
+    dataset: dict,
+    raw_adata: ad.AnnData,
+    base_preprocess_params: dict,
+    fixed_preprocess_params: dict,
+    base_estimator_params: dict,
+    base_graph_params: dict,
+    preprocess_search_space: dict,
+    estimator_search_space: dict,
+    graph_search_space: dict,
+    random_state: int = 0,
+    embedding_epochs: int = 100,
+    invalid_score: float = -1e9,
+    label_weight: float = 1.0,
+    batch_weight: float = 0.25,
+    density_weight: float = -0.05,
+):
+    def objective(params: dict) -> float:
+        trial_preprocess, trial_estimator_params, trial_graph = split_optimization_params(
+            params,
+            base_preprocess_params=base_preprocess_params,
+            fixed_preprocess_params=fixed_preprocess_params,
+            base_estimator_params=base_estimator_params,
+            base_graph_params=base_graph_params,
+            preprocess_search_space=preprocess_search_space,
+            estimator_search_space=estimator_search_space,
+            graph_search_space=graph_search_space,
+        )
+        trial_estimator = make_estimator(dataset, random_state=random_state, **trial_estimator_params)
+        try:
+            trial = trial_estimator.preprocess(raw_adata, **trial_preprocess)
+            trial.obsm["X_scalp"] = trial_estimator.embed(
+                trial,
+                **trial_graph,
+                embedding_random_state=random_state,
+                n_epochs=embedding_epochs,
+            )
+            scores = score_embedding(
+                trial,
+                embedding_key="X_scalp",
+                batch_key=dataset["batch_key"],
+                label_key=dataset["label_key"] if dataset["label_key"] in trial.obs else None,
+            ).iloc[0]
+        except Exception as exc:
+            print(
+                "failed params="
+                f"preprocess={trial_preprocess}, estimator={trial_estimator_params}, graph={trial_graph}: {exc}"
+            )
+            return float(invalid_score)
+
+        label_agreement = metric_value(scores, "knn_label_agreement")
+        batch_mixing = metric_value(scores, "batch_mixing")
+        graph_density = metric_value(scores, "graph_density")
+        return float(label_weight * label_agreement + batch_weight * batch_mixing + density_weight * graph_density)
+
+    return objective
+
+
+def optimization_search_space(
+    *,
+    preprocess_search_space: dict,
+    estimator_search_space: dict,
+    graph_search_space: dict,
+) -> dict:
+    return {
+        **preprocess_search_space,
+        **estimator_search_space,
+        **graph_search_space,
+    }
+
+
+def compact_bounds(best: dict, name: str, low, high, radius, *, integer: bool = False) -> list:
+    center = best[name]
+    new_low = max(low, center - radius)
+    new_high = min(high, center + radius)
+    if integer:
+        new_low = int(round(new_low))
+        new_high = int(round(new_high))
+        if new_low == new_high:
+            new_low = max(low, new_low - 1)
+            new_high = min(high, new_high + 1)
+    return [new_low, new_high]
+
+
+def make_compact_search_space(
+    search_space: dict,
+    best_params: dict,
+    radii: dict,
+    *,
+    fix_categoricals: bool = True,
+) -> dict:
+    compact = {}
+    for name, spec in search_space.items():
+        if spec["type"] == "categorical":
+            compact[name] = {"type": "categorical", "values": [best_params[name]]} if fix_categoricals else spec.copy()
+            continue
+        low, high = spec["bounds"]
+        radius = radii[name]
+        compact[name] = {
+            **spec,
+            "bounds": compact_bounds(best_params, name, low, high, radius, integer=spec["type"] == "int"),
+        }
+    return compact
+
+
+def run_latent_bayesopt(*args, **kwargs):
+    ensure_bo_dependencies()
+    from scalp_lite.optimization import latent_bayesopt
+
+    return latent_bayesopt(*args, **kwargs)
+
+
+def save_best_optimization_result(
+    *,
+    dataset_name: str,
+    optimization_results: dict,
+    base_preprocess_params: dict,
+    fixed_preprocess_params: dict,
+    base_estimator_params: dict,
+    base_graph_params: dict,
+    preprocess_search_space: dict,
+    estimator_search_space: dict,
+    graph_search_space: dict,
+    random_state: int,
+    project_root: Path | None = None,
+) -> tuple[Path, dict, dict, dict]:
+    best_model_name, best_result = max(optimization_results.items(), key=lambda item: item[1]["best_score"])
+    optimized_preprocess_params, optimized_estimator_params, optimized_graph_params = split_optimization_params(
+        best_result["best_params"],
+        base_preprocess_params=base_preprocess_params,
+        fixed_preprocess_params=fixed_preprocess_params,
+        base_estimator_params=base_estimator_params,
+        base_graph_params=base_graph_params,
+        preprocess_search_space=preprocess_search_space,
+        estimator_search_space=estimator_search_space,
+        graph_search_space=graph_search_space,
+    )
+    path = save_optimized_graph_params(
+        dataset_name,
+        optimized_graph_params,
+        preprocess_params=optimized_preprocess_params,
+        estimator_params=optimized_estimator_params,
+        metadata={
+            "best_model": best_model_name,
+            "best_score": best_result["best_score"],
+            "pca_best_score": optimization_results["pca"]["best_score"],
+            "gplvm_best_score": optimization_results["gplvm"]["best_score"],
+            "fixed_preprocess_params": fixed_preprocess_params,
+            "random_state": random_state,
+        },
+        project_root=project_root,
+    )
+    return path, optimized_preprocess_params, optimized_estimator_params, optimized_graph_params
 
 
 def _coerce_sweep_value(value, template):

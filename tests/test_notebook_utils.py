@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from scalp_lite.notebook_utils import load_optimized_graph_params, optimized_params_path, save_optimized_graph_params
+from scalp_lite.notebook_utils import (
+    load_optimized_graph_params,
+    make_compact_search_space,
+    optimization_search_space,
+    optimized_params_path,
+    save_best_optimization_result,
+    save_optimized_graph_params,
+    split_optimization_params,
+)
 
 
 def test_optimized_graph_params_roundtrip(tmp_path):
@@ -26,3 +34,75 @@ def test_optimized_graph_params_roundtrip(tmp_path):
     assert payload["preprocess_params"]["n_top_genes"] == 2000
     assert payload["estimator_params"]["n_components"] == 80
     assert payload["metadata"]["best_score"] == 0.94
+
+
+def test_optimization_helpers_split_and_compact():
+    preprocess_space = {"n_top_genes": {"type": "int", "bounds": [500, 3000]}}
+    estimator_space = {"n_components": {"type": "int", "bounds": [20, 150]}}
+    graph_space = {
+        "n_neighbors": {"type": "int", "bounds": [5, 40]},
+        "edge_weighting": {"type": "categorical", "values": ["binary", "distance"]},
+    }
+
+    search_space = optimization_search_space(
+        preprocess_search_space=preprocess_space,
+        estimator_search_space=estimator_space,
+        graph_search_space=graph_space,
+    )
+    compact = make_compact_search_space(
+        search_space,
+        {
+            "n_top_genes": 2000,
+            "n_components": 80,
+            "n_neighbors": 33,
+            "edge_weighting": "distance",
+        },
+        {"n_top_genes": 500, "n_components": 20, "n_neighbors": 5},
+    )
+
+    assert compact["n_top_genes"]["bounds"] == [1500, 2500]
+    assert compact["n_components"]["bounds"] == [60, 100]
+    assert compact["n_neighbors"]["bounds"] == [28, 38]
+    assert compact["edge_weighting"]["values"] == ["distance"]
+
+    preprocess, estimator, graph = split_optimization_params(
+        {"n_top_genes": 1000, "n_components": 50, "n_neighbors": 10},
+        base_preprocess_params={"n_top_genes": 2000},
+        fixed_preprocess_params={"max_cells": 2000},
+        base_estimator_params={"n_components": 100},
+        base_graph_params={"n_neighbors": 15, "metric": "euclidean"},
+        preprocess_search_space=preprocess_space,
+        estimator_search_space=estimator_space,
+        graph_search_space=graph_space,
+    )
+
+    assert preprocess == {"n_top_genes": 1000, "max_cells": 2000}
+    assert estimator == {"n_components": 50}
+    assert graph == {"n_neighbors": 10, "metric": "euclidean"}
+
+
+def test_save_best_optimization_result_uses_best_model(tmp_path):
+    result = save_best_optimization_result(
+        dataset_name="pancreas",
+        optimization_results={
+            "pca": {"best_score": 0.5, "best_params": {"n_neighbors": 10}},
+            "gplvm": {"best_score": 0.7, "best_params": {"n_neighbors": 22}},
+        },
+        base_preprocess_params={"n_top_genes": 2000},
+        fixed_preprocess_params={"max_cells": 2000},
+        base_estimator_params={"n_components": 100},
+        base_graph_params={"n_neighbors": 15},
+        preprocess_search_space={},
+        estimator_search_space={},
+        graph_search_space={"n_neighbors": {"type": "int", "bounds": [5, 40]}},
+        random_state=0,
+        project_root=tmp_path,
+    )
+
+    path, preprocess, estimator, graph = result
+    payload = load_optimized_graph_params("pancreas", project_root=tmp_path)
+    assert path == optimized_params_path("pancreas", project_root=tmp_path)
+    assert preprocess == {"n_top_genes": 2000, "max_cells": 2000}
+    assert estimator == {"n_components": 100}
+    assert graph == {"n_neighbors": 22}
+    assert payload["metadata"]["best_model"] == "gplvm"
