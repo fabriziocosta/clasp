@@ -95,6 +95,46 @@ DATASET_REGISTRY = {
 
 
 DOWNLOAD_REGISTRY = {
+    "scib_pancreas": {
+        "kind": "figshare",
+        "filename": "human_pancreas_norm_complexBatch.h5ad",
+        "article_id": 12420968,
+        "preferred_file": "human_pancreas_norm_complexBatch.h5ad",
+        "batch_key": "study",
+        "label_key": "cell_type",
+        "source": "https://figshare.com/articles/dataset/12420968",
+        "paper_group": "scIB benchmark",
+    },
+    "scib_lung_atlas": {
+        "kind": "figshare",
+        "filename": "Lung_atlas_public.h5ad",
+        "article_id": 12420968,
+        "preferred_file": "Lung_atlas_public.h5ad",
+        "batch_key": "batch",
+        "label_key": "cell_type",
+        "source": "https://figshare.com/articles/dataset/12420968",
+        "paper_group": "scIB benchmark",
+    },
+    "scib_immune_human": {
+        "kind": "figshare",
+        "filename": "Immune_ALL_human.h5ad",
+        "article_id": 12420968,
+        "preferred_file": "Immune_ALL_human.h5ad",
+        "batch_key": "batch",
+        "label_key": "final_annotation",
+        "source": "https://figshare.com/articles/dataset/12420968",
+        "paper_group": "scIB benchmark",
+    },
+    "scib_immune_human_mouse": {
+        "kind": "figshare",
+        "filename": "Immune_ALL_hum_mou.h5ad",
+        "article_id": 12420968,
+        "preferred_file": "Immune_ALL_hum_mou.h5ad",
+        "batch_key": "batch",
+        "label_key": "final_annotation",
+        "source": "https://figshare.com/articles/dataset/12420968",
+        "paper_group": "scIB benchmark",
+    },
     "pancreas": {
         "kind": "url",
         "filename": "pancreas_normalized.h5ad",
@@ -103,6 +143,7 @@ DOWNLOAD_REGISTRY = {
         "batch_key": "study",
         "label_key": "cell_type",
         "source": "https://zenodo.org/records/3930949",
+        "paper_group": "development/local benchmark",
     },
     "pbmc3k": {
         "kind": "figshare",
@@ -112,24 +153,99 @@ DOWNLOAD_REGISTRY = {
         "batch_key": "batch",
         "label_key": "leiden",
         "source": "https://figshare.com/articles/dataset/scanpy-pbmc3k_h5ad/16447278",
+        "paper_group": "smoke test",
     },
     "zebrafish": {
-        "kind": "cellrank",
+        "kind": "url",
         "filename": "cellrank-zebrafish.h5ad",
+        "url": "https://ndownloader.figshare.com/files/27265280",
         "function": "zebrafish",
         "batch_key": "Stage",
         "label_key": "lineages",
         "source": "https://cellrank.readthedocs.io/en/latest/api/_autosummary/datasets/cellrank.datasets.zebrafish.html",
+        "paper_group": "development/time series",
     },
     "cellrank_pancreas": {
-        "kind": "cellrank",
+        "kind": "url",
         "filename": "cellrank-pancreas.h5ad",
+        "url": "https://ndownloader.figshare.com/files/25060877",
         "function": "pancreas",
         "batch_key": "clusters",
         "label_key": "clusters",
         "source": "https://cellrank.readthedocs.io/en/latest/api/_autosummary/datasets/cellrank.datasets.pancreas.html",
+        "paper_group": "CellRank trajectory benchmark",
+    },
+    "cellrank_lung": {
+        "kind": "url",
+        "filename": "cellrank-lung.h5ad",
+        "url": "https://ndownloader.figshare.com/files/25038224",
+        "function": "lung",
+        "batch_key": "time",
+        "label_key": "clusters",
+        "source": "https://cellrank.readthedocs.io/en/latest/api/datasets.html",
+        "paper_group": "CellRank trajectory benchmark",
+    },
+    "cellrank_bone_marrow": {
+        "kind": "url",
+        "filename": "cellrank-bone-marrow.h5ad",
+        "url": "https://ndownloader.figshare.com/files/35826944",
+        "function": "bone_marrow",
+        "batch_key": "sample",
+        "label_key": "clusters",
+        "source": "https://cellrank.readthedocs.io/en/latest/api/datasets.html",
+        "paper_group": "CellRank trajectory benchmark",
+    },
+    "cellrank_reprogramming_schiebinger": {
+        "kind": "url",
+        "filename": "cellrank-reprogramming-schiebinger.h5ad",
+        "url": "https://ndownloader.figshare.com/files/28618734",
+        "function": "reprogramming_schiebinger",
+        "batch_key": "day",
+        "label_key": "clusters",
+        "source": "https://cellrank.readthedocs.io/en/latest/api/datasets.html",
+        "paper_group": "CellRank trajectory benchmark",
+    },
+    "cellrank_reprogramming_morris": {
+        "kind": "url",
+        "filename": "cellrank-reprogramming-morris.h5ad",
+        "url": "https://ndownloader.figshare.com/files/25503773",
+        "function": "reprogramming_morris",
+        "batch_key": "day",
+        "label_key": "clusters",
+        "source": "https://cellrank.readthedocs.io/en/latest/api/datasets.html",
+        "paper_group": "CellRank trajectory benchmark",
     },
 }
+
+
+PAPER_DATASET_DOWNLOADS = [
+    "scib_pancreas",
+    "scib_lung_atlas",
+    "scib_immune_human",
+    "scib_immune_human_mouse",
+    "cellrank_bone_marrow",
+    "cellrank_lung",
+    "cellrank_pancreas",
+    "cellrank_reprogramming_schiebinger",
+    "cellrank_reprogramming_morris",
+    "zebrafish",
+]
+
+
+PAPER_DATASETS_REQUIRING_MANUAL_CURATION = [
+    {
+        "dataset": "Cancer benchmark collection",
+        "paper_description": "11 cancer scRNA-seq studies: breast cancer, PDAC, melanoma, lung cancer, colorectal cancer.",
+        "references": "Azizi, Bassez, Slyper, Elyada, Peng, Bi, Karlsson, Lee, Qian, Nath, Zhang",
+        "reason": "The SCALP PDF names the studies via citations but does not provide direct h5ad files or a machine-readable manifest.",
+    },
+    {
+        "dataset": "Additional time-series collection",
+        "paper_description": "Human hematopoietic differentiation, fetal lung development, planaria regeneration, mouse cortex/cerebellum development.",
+        "references": "Tusi, Travaglini, Plass, Tempora",
+        "reason": "The SCALP PDF names the biological datasets but does not provide direct h5ad files or a machine-readable manifest.",
+    },
+]
 
 
 def resolve_project_root(start: Path | None = None) -> Path:
@@ -664,8 +780,9 @@ def download_cellrank_dataset(function_name: str, output_path: str | Path, *, ov
         return output_path
     try:
         import cellrank as cr
-    except ImportError as exc:
-        raise ImportError("CellRank datasets require `pip install cellrank`.") from exc
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "cellrank"])
+        import cellrank as cr
     getattr(cr.datasets, function_name)(path=str(output_path))
     print(f"saved: {output_path}")
     return output_path
@@ -708,7 +825,31 @@ def summarize_downloads(downloaded: dict[str, Path], *, project_root: Path | Non
                 "label_key": dataset["label_key"],
                 "has_label_key": dataset["label_key"] in adata.obs,
                 "source": dataset["source"],
+                "paper_group": dataset.get("paper_group"),
             }
         )
         adata.file.close()
     return pd.DataFrame(rows)
+
+
+def paper_dataset_manifest(selected_datasets=None) -> pd.DataFrame:
+    selected_datasets = PAPER_DATASET_DOWNLOADS if selected_datasets is None else selected_datasets
+    rows = []
+    for name in selected_datasets:
+        dataset = DOWNLOAD_REGISTRY[name]
+        rows.append(
+            {
+                "dataset": name,
+                "filename": dataset["filename"],
+                "kind": dataset["kind"],
+                "batch_key": dataset["batch_key"],
+                "label_key": dataset["label_key"],
+                "paper_group": dataset.get("paper_group"),
+                "source": dataset["source"],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def paper_datasets_requiring_manual_curation() -> pd.DataFrame:
+    return pd.DataFrame(PAPER_DATASETS_REQUIRING_MANUAL_CURATION)

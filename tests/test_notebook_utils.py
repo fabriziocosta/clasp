@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from scalp_lite.notebook_utils import (
+    DOWNLOAD_REGISTRY,
+    PAPER_DATASET_DOWNLOADS,
+    PAPER_DATASETS_REQUIRING_MANUAL_CURATION,
     load_optimized_graph_params,
     make_compact_search_space,
     optimization_search_space,
     optimized_params_path,
+    paper_dataset_manifest,
     save_best_optimization_result,
     save_optimized_graph_params,
     split_optimization_params,
@@ -130,3 +134,23 @@ def test_save_best_optimization_result_allows_pca_only(tmp_path):
     assert graph == {"n_neighbors": 10}
     assert payload["metadata"]["best_model"] == "pca"
     assert "gplvm_best_score" not in payload["metadata"]
+
+
+def test_paper_dataset_download_manifest_is_complete():
+    assert PAPER_DATASET_DOWNLOADS
+    assert set(PAPER_DATASET_DOWNLOADS).issubset(DOWNLOAD_REGISTRY)
+
+    manifest = paper_dataset_manifest()
+    assert set(manifest["dataset"]) == set(PAPER_DATASET_DOWNLOADS)
+    assert manifest["filename"].notna().all()
+    assert manifest["source"].notna().all()
+    assert manifest["paper_group"].notna().all()
+    assert set(manifest["kind"]).issubset({"url", "figshare"})
+
+
+def test_manual_paper_dataset_list_documents_unresolved_sources():
+    assert PAPER_DATASETS_REQUIRING_MANUAL_CURATION
+    for row in PAPER_DATASETS_REQUIRING_MANUAL_CURATION:
+        assert row["dataset"]
+        assert row["paper_description"]
+        assert row["reason"]
