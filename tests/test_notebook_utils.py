@@ -181,3 +181,11 @@ def test_dataset_configs_are_loaded_from_yaml():
     assert spec["batch_key"] == "tech"
     assert spec["label_key"] == "celltype"
     assert spec["download"]["filename"] == "human_pancreas_norm_complexBatch.h5ad"
+
+
+def test_cellrank_bone_marrow_uses_artificial_batches():
+    dataset = dataset_config("cellrank_bone_marrow")
+
+    assert dataset["batch_key"] == "sample"
+    assert dataset["label_key"] == "clusters"
+    assert dataset["preprocess"]["create_artificial_batch"] is True

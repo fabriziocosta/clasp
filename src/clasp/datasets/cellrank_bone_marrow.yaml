@@ -14,7 +14,7 @@ preprocess:
   normalize: false
   hvg_flavor: variance
   min_gene_counts: 0
-  create_artificial_batch: false
+  create_artificial_batch: true
 graph:
   n_neighbors: 20
   intra_fraction: 0.5

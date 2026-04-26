@@ -9,6 +9,14 @@ late after ipykernel or extensions have imported compiled libraries.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_SRC = _PROJECT_ROOT / "src"
+if _SRC.is_dir():
+    sys.path.insert(0, str(_SRC))
 
 
 for _name in (
