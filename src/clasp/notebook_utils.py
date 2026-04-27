@@ -257,33 +257,58 @@ def load_optimized_graph_params(
     return json.loads(path.read_text())
 
 
+def _default_param_payload(dataset_name: str, dataset: dict, path: Path, *, message: str) -> dict:
+    return {
+        "dataset": dataset_name,
+        "graph_params": dataset.get("graph", {}).copy(),
+        "preprocess_params": dataset.get("preprocess", {}).copy(),
+        "estimator_params": {},
+        "metadata": {
+            "source": "dataset_defaults",
+            "message": message,
+        },
+        "source": "dataset_defaults",
+        "path": str(path),
+    }
+
+
+def _optimized_payload_matches_dataset(payload: dict, dataset: dict) -> bool:
+    metadata = payload.get("metadata", {})
+    return metadata.get("batch_key") == dataset["batch_key"] and metadata.get("label_key") == dataset["label_key"]
+
+
 def load_or_default_params(
     dataset_name: str,
     dataset: dict | None = None,
     *,
     project_root: Path | None = None,
     params_dir: str | Path = "data/optimized_params",
+    require_metadata_compatibility: bool = False,
 ) -> dict:
     dataset = dataset_config(dataset_name, project_root=project_root) if dataset is None else dataset
     path = optimized_params_path(dataset_name, project_root=project_root, params_dir=params_dir)
     try:
         payload = load_optimized_graph_params(dataset_name, project_root=project_root, params_dir=params_dir)
+        if require_metadata_compatibility and not _optimized_payload_matches_dataset(payload, dataset):
+            return _default_param_payload(
+                dataset_name,
+                dataset,
+                path,
+                message=(
+                    f"Optimized parameter file at {path} lacks matching dataset metadata; "
+                    "using dataset registry defaults. Rerun notebook 00_1 to regenerate optimized parameters."
+                ),
+            )
         payload.setdefault("source", "optimized")
         payload.setdefault("path", str(path))
         return payload
     except FileNotFoundError:
-        return {
-            "dataset": dataset_name,
-            "graph_params": dataset.get("graph", {}).copy(),
-            "preprocess_params": dataset.get("preprocess", {}).copy(),
-            "estimator_params": {},
-            "metadata": {
-                "source": "dataset_defaults",
-                "message": f"No optimized parameter file found at {path}; using dataset registry defaults.",
-            },
-            "source": "dataset_defaults",
-            "path": str(path),
-        }
+        return _default_param_payload(
+            dataset_name,
+            dataset,
+            path,
+            message=f"No optimized parameter file found at {path}; using dataset registry defaults.",
+        )
 
 
 def install_bo_warning_filters() -> None:
@@ -375,7 +400,12 @@ def prepare_visualization_run(
     max_cells: int | None = 6000,
 ) -> dict:
     dataset = dataset_config(selected_dataset, project_root=project_root)
-    optimized_params = load_or_default_params(selected_dataset, dataset, project_root=project_root)
+    optimized_params = load_or_default_params(
+        selected_dataset,
+        dataset,
+        project_root=project_root,
+        require_metadata_compatibility=True,
+    )
     preprocess_overrides = {
         **optimized_params.get("preprocess_params", {}),
         "max_cells": max_cells,
@@ -593,6 +623,7 @@ def save_best_optimization_result(
     estimator_search_space: dict,
     graph_search_space: dict,
     random_state: int,
+    dataset: dict | None = None,
     project_root: Path | None = None,
 ) -> tuple[Path, dict, dict, dict]:
     best_model_name, best_result = max(optimization_results.items(), key=lambda item: item[1]["best_score"])
@@ -612,6 +643,9 @@ def save_best_optimization_result(
         "fixed_preprocess_params": fixed_preprocess_params,
         "random_state": random_state,
     }
+    if dataset is not None:
+        metadata["batch_key"] = dataset["batch_key"]
+        metadata["label_key"] = dataset["label_key"]
     if "pca" in optimization_results:
         metadata["pca_best_score"] = optimization_results["pca"]["best_score"]
     if "gplvm" in optimization_results:
@@ -775,7 +809,14 @@ def optimize_dataset_parameters(
     }
 
     if params_path.exists() and skip_existing_optimized and not overwrite_existing:
-        return row_from_optimized_params(dataset_name, dataset, project_root=project_root)
+        payload = load_optimized_graph_params(dataset_name, project_root=project_root)
+        if _optimized_payload_matches_dataset(payload, dataset):
+            return row_from_optimized_params(dataset_name, dataset, project_root=project_root)
+        row["status"] = "stale_optimized_params"
+        row["stale_params_message"] = (
+            f"Existing optimized parameter file at {params_path} lacks matching dataset metadata; rerunning optimization."
+        )
+        print(row["stale_params_message"])
 
     if not dataset["input_path"].exists():
         row["status"] = "missing_input"
@@ -862,6 +903,7 @@ def optimize_dataset_parameters(
             estimator_search_space=estimator_search_space,
             graph_search_space=graph_search_space,
             random_state=random_state,
+            dataset=dataset,
             project_root=project_root,
         )
 

@@ -150,7 +150,13 @@ def test_optimize_dataset_parameters_skips_existing_params(tmp_path):
         {"n_neighbors": 10},
         preprocess_params={"n_top_genes": 1000},
         estimator_params={"n_components": 40},
-        metadata={"best_model": "pca", "best_score": 0.5, "pca_best_score": 0.5},
+        metadata={
+            "best_model": "pca",
+            "best_score": 0.5,
+            "pca_best_score": 0.5,
+            "batch_key": "tech",
+            "label_key": "celltype",
+        },
         project_root=tmp_path,
     )
 
@@ -233,9 +239,35 @@ def test_cellrank_lung_uses_day_batches():
     assert dataset["label_key"] == "clusters"
 
 
+def test_cellrank_pancreas_uses_artificial_batches():
+    dataset = dataset_config("cellrank_pancreas")
+
+    assert dataset["batch_key"] == "sample"
+    assert dataset["label_key"] == "clusters"
+    assert dataset["preprocess"]["create_artificial_batch"] is True
+
+
 def test_prepare_visualization_run_uses_current_dataset_batch_key():
     context = prepare_visualization_run("cellrank_lung", max_cells=100)
 
     assert context["batch_key"] == "day"
     assert context["estimator"].batch_key == "day"
     assert context["preprocess_overrides"]["max_cells"] == 100
+
+
+def test_prepare_visualization_run_ignores_legacy_optimized_params(tmp_path):
+    save_optimized_graph_params(
+        "cellrank_pancreas",
+        {"n_neighbors": 10},
+        preprocess_params={"create_artificial_batch": False},
+        estimator_params={"n_components": 40},
+        metadata={"best_model": "pca", "best_score": 0.5},
+        project_root=tmp_path,
+    )
+
+    context = prepare_visualization_run("cellrank_pancreas", project_root=tmp_path, max_cells=100)
+
+    assert context["optimized_params"]["source"] == "dataset_defaults"
+    assert context["batch_key"] == "sample"
+    assert context["estimator"].batch_key == "sample"
+    assert context["preprocess_overrides"]["create_artificial_batch"] is True

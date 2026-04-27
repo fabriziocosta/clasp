@@ -1,7 +1,7 @@
 name: cellrank_pancreas
 input: data/cellrank-pancreas.h5ad
 embedded: data/cellrank-pancreas-clasp.h5ad
-batch_key: clusters
+batch_key: sample
 label_key: clusters
 source: https://cellrank.readthedocs.io/en/latest/api/_autosummary/datasets/cellrank.datasets.pancreas.html
 paper_group: CellRank trajectory benchmark
@@ -13,7 +13,7 @@ preprocess:
   normalize: false
   hvg_flavor: variance
   min_gene_counts: 0
-  create_artificial_batch: false
+  create_artificial_batch: true
 graph:
   n_neighbors: 20
   intra_fraction: 0.5
