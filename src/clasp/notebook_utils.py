@@ -432,6 +432,8 @@ def run_embedding_visualization(
     *,
     save: bool = True,
     figure_dir: str | Path = "figures",
+    display_fn=None,
+    close_figures: bool = False,
 ) -> tuple[ad.AnnData, dict]:
     dataset = context["dataset"]
     estimator = context["estimator"]
@@ -441,18 +443,33 @@ def run_embedding_visualization(
     adata = embed_dataset(adata, estimator, context["graph_params"])
 
     figure_dir = Path(figure_dir)
-    estimator.plot(
+    clasp_path = figure_dir / f"{selected_dataset}_clasp_embedding.pdf"
+    pca_path = figure_dir / f"{selected_dataset}_pca_embedding.pdf"
+    clasp_axes = estimator.plot(
         adata,
         embedding_key="X_clasp",
-        filename=figure_dir / f"{selected_dataset}_clasp_embedding.pdf",
+        filename=clasp_path,
     )
-    estimator.plot(
+    pca_axes = estimator.plot(
         adata,
         embedding_key="X_pca",
-        filename=figure_dir / f"{selected_dataset}_pca_embedding.pdf",
+        filename=pca_path,
     )
+    figures = [np.asarray(clasp_axes).ravel()[0].figure, np.asarray(pca_axes).ravel()[0].figure]
+    if display_fn is not None:
+        for fig in figures:
+            display_fn(fig)
+    if close_figures:
+        for fig in figures:
+            plt.close(fig)
+
+    context["figure_paths"] = {
+        "clasp": str(clasp_path),
+        "pca": str(pca_path),
+    }
     if save:
         estimator.save(adata, context["output_path"])
+        context["embedded_path"] = str(context["output_path"])
     return adata, context["graph_params"]
 
 
@@ -954,6 +971,11 @@ def run_dataset_optimization_sweep(
     *,
     summary_path: str | Path,
     display_fn=None,
+    generate_figures: bool = False,
+    display_figures: bool = True,
+    save_visualization: bool = True,
+    visualization_max_cells: int | None = 6000,
+    figure_dir: str | Path = "figures",
     **optimize_kwargs,
 ) -> pd.DataFrame:
     summary_rows = []
@@ -971,6 +993,32 @@ def run_dataset_optimization_sweep(
             }
             print(row["traceback"])
         print_optimization_result(row)
+
+        if generate_figures and row.get("status") not in {"failed", "missing_input"}:
+            try:
+                context = prepare_visualization_run(
+                    dataset_name,
+                    project_root=optimize_kwargs.get("project_root"),
+                    random_state=optimize_kwargs.get("random_state", 0),
+                    max_cells=visualization_max_cells,
+                )
+                run_embedding_visualization(
+                    context,
+                    save=save_visualization,
+                    figure_dir=figure_dir,
+                    display_fn=display_fn if display_figures else None,
+                    close_figures=not display_figures,
+                )
+                row["visualization_status"] = "generated"
+                row["clasp_figure_path"] = context["figure_paths"]["clasp"]
+                row["pca_figure_path"] = context["figure_paths"]["pca"]
+                row["embedded_path"] = context.get("embedded_path")
+            except Exception as exc:
+                row["visualization_status"] = "failed"
+                row["visualization_error"] = repr(exc)
+                row["visualization_traceback"] = traceback.format_exc()
+                print(row["visualization_traceback"])
+
         summary_rows.append(row)
 
         summary = pd.DataFrame(summary_rows)

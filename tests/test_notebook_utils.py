@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import clasp.notebook_utils as notebook_utils
 from clasp.notebook_utils import (
     DOWNLOAD_REGISTRY,
     PAPER_DATASET_DOWNLOADS,
@@ -14,6 +15,7 @@ from clasp.notebook_utils import (
     paper_dataset_manifest,
     prepare_visualization_run,
     read_dataset_spec,
+    run_dataset_optimization_sweep,
     save_best_optimization_result,
     save_optimized_graph_params,
     split_optimization_params,
@@ -271,3 +273,42 @@ def test_prepare_visualization_run_ignores_legacy_optimized_params(tmp_path):
     assert context["batch_key"] == "sample"
     assert context["estimator"].batch_key == "sample"
     assert context["preprocess_overrides"]["create_artificial_batch"] is True
+
+
+def test_run_dataset_optimization_sweep_can_generate_figures(monkeypatch, tmp_path):
+    displayed = []
+
+    def fake_optimize_dataset_parameters(dataset_name, **kwargs):
+        return {"dataset": dataset_name, "status": "skipped_existing"}
+
+    def fake_prepare_visualization_run(dataset_name, **kwargs):
+        return {"selected_dataset": dataset_name}
+
+    def fake_run_embedding_visualization(context, *, display_fn=None, **kwargs):
+        context["figure_paths"] = {
+            "clasp": "figures/example_clasp_embedding.pdf",
+            "pca": "figures/example_pca_embedding.pdf",
+        }
+        context["embedded_path"] = "data/example-clasp.h5ad"
+        if display_fn is not None:
+            display_fn("figure")
+        return None, {}
+
+    monkeypatch.setattr(notebook_utils, "optimize_dataset_parameters", fake_optimize_dataset_parameters)
+    monkeypatch.setattr(notebook_utils, "prepare_visualization_run", fake_prepare_visualization_run)
+    monkeypatch.setattr(notebook_utils, "run_embedding_visualization", fake_run_embedding_visualization)
+
+    summary = run_dataset_optimization_sweep(
+        ["example"],
+        summary_path=tmp_path / "summary.csv",
+        generate_figures=True,
+        display_fn=displayed.append,
+        project_root=tmp_path,
+    )
+
+    row = summary.iloc[0]
+    assert row["visualization_status"] == "generated"
+    assert row["clasp_figure_path"] == "figures/example_clasp_embedding.pdf"
+    assert row["pca_figure_path"] == "figures/example_pca_embedding.pdf"
+    assert row["embedded_path"] == "data/example-clasp.h5ad"
+    assert displayed
