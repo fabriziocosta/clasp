@@ -2,7 +2,7 @@
 
 **CLASP** stands for **Cell integration via Linear Assignment and Sparse Pairing**.
 
-`clasp` is a small, dependency-light implementation of the CLASP idea: integrate batches of single-cell data by combining within-batch nearest-neighbor edges with cross-batch edges derived from Hungarian assignment, then embed and score the resulting graph.
+`clasp` integrates batches of single-cell data by combining within-batch nearest-neighbor edges with cross-batch edges derived from Hungarian assignment, then embeds and scores the resulting graph.
 
 The required interface is an in-memory `AnnData` object or a `.h5ad` file.
 
