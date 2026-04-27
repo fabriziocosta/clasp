@@ -191,10 +191,7 @@ The default `inter_edge_mode="propagate_neighbors"` does not add direct assignme
 
 The number of propagated cross-batch neighbors is:
 
-$$
-k_{\mathrm{inter}} =
-n_{\mathrm{neighbors}} - k_{\mathrm{intra}}
-$$
+$$ k_{\mathrm{inter}} = n_{\mathrm{neighbors}} - k_{\mathrm{intra}} $$
 
 Set `inter_edge_mode="assignment"` to recover the legacy behavior that links retained assigned pairs directly.
 

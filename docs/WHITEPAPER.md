@@ -119,7 +119,7 @@ Rather than selecting neighbors directly by corrected distance, CLASP defaults t
 
 $$
 R_{uv} =
-\operatorname{rank}_{z}
+\mathrm{rank}_{z}
 \left(D_{uz}^{\mathrm{CSLS}}\right)(v)
 $$
 
@@ -168,15 +168,7 @@ By default, CLASP does not add the surviving assignment edge directly. Instead, 
 
 The number of inherited cross-batch neighbors is:
 
-$$
-k_{\mathrm{inter}}
-=
-n_{\mathrm{neighbors}}
--
-\left\lceil
-n_{\mathrm{neighbors}} \cdot \rho_{\mathrm{intra}}
-\right\rceil
-$$
+$$ k_{\mathrm{inter}} = n_{\mathrm{neighbors}} - \left\lceil n_{\mathrm{neighbors}} \cdot \rho_{\mathrm{intra}} \right\rceil $$
 
 This makes `n_neighbors` a total neighborhood scale split between within-batch kNN edges and propagated cross-batch neighbor edges.
 
