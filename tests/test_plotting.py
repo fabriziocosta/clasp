@@ -70,6 +70,39 @@ def test_plot_embedding_pair_uses_larger_legend_markers(toy_adata):
     plt.close(axes[0].figure)
 
 
+def test_plot_embedding_pair_saves_high_resolution_png(toy_adata, tmp_path):
+    toy_adata.obsm["X_clasp"] = toy_adata.X[:, :2]
+    output_path = tmp_path / "nested" / "embedding.png"
+
+    axes = plot_embedding_pair(
+        toy_adata,
+        embedding_key="X_clasp",
+        batch_key="batch",
+        label_key="label",
+        filename=output_path,
+    )
+
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0
+    plt.close(axes[0].figure)
+
+
+def test_plot_embedding_pair_defaults_missing_suffix_to_png(toy_adata, tmp_path):
+    toy_adata.obsm["X_clasp"] = toy_adata.X[:, :2]
+    output_path = tmp_path / "embedding"
+
+    axes = plot_embedding_pair(
+        toy_adata,
+        embedding_key="X_clasp",
+        batch_key="batch",
+        label_key="label",
+        filename=output_path,
+    )
+
+    assert output_path.with_suffix(".png").exists()
+    plt.close(axes[0].figure)
+
+
 def test_plot_embedding_pair_rejects_missing_label(toy_adata):
     toy_adata.obsm["X_clasp"] = toy_adata.X[:, :2]
 

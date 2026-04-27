@@ -4,7 +4,7 @@
 
 `clasp` is a small, dependency-light implementation of the CLASP idea: integrate batches of single-cell data by combining within-batch nearest-neighbor edges with cross-batch Hungarian assignment edges, then embed and score the resulting graph.
 
-It intentionally avoids the legacy research dependencies from the original `cellsaw` repository. The required interface is an in-memory `AnnData` object or a `.h5ad` file.
+The required interface is an in-memory `AnnData` object or a `.h5ad` file.
 
 ## Install
 
@@ -13,6 +13,12 @@ pip install -e ".[dev,umap]"
 ```
 
 UMAP is optional. If `umap-learn` is not installed, `embed_graph(method="auto")` falls back to spectral embedding from scikit-learn.
+
+## Documentation
+
+- [CLASP Whitepaper](docs/WHITEPAPER.md): method overview, motivation, data model, graph construction, hubness correction, assignment strategy, embedding, and evaluation concepts.
+- [Processing Pipeline](docs/PROCESSING_PIPELINE.md): dataset YAML configuration, notebook flow, download handling, preprocessing, tuning artifacts, embedding outputs, and recommended end-to-end workflow.
+- [Latent Bayesian Optimization](docs/OPTIMIZATION.md): optional hyperparameter tuning with BoTorch/GPyTorch, search-space encoding, latent optimization, candidate repair, and saved optimized parameter files.
 
 ## Quick Start
 
@@ -94,6 +100,7 @@ estimator.save(adata, "clasp_embedded.h5ad")
 ```
 
 `estimator.plot` uses a viridis palette for batches and a categorical `tab20` palette for labels by default. It shuffles the draw order reproducibly so ordered labels or batches do not hide mixing in crowded regions.
+Pass `filename="figures/my_embedding"` to also save the displayed plot as a high-resolution PNG, or provide an explicit suffix such as `.pdf` when vector output is smaller. Omitting `filename` keeps the default display-only behavior.
 
 `ClaspEstimator.preprocess` follows the standard single-cell preprocessing pattern used by the original project: optionally filter cells and genes, normalize each cell to `target_sum`, optionally apply `log1p`, select highly variable genes with `scanpy.pp.highly_variable_genes`, and compute PCA.
 
@@ -112,7 +119,7 @@ Optional:
 ## Notebooks
 
 - `notebooks/00_download_datasets.ipynb`: download registered `.h5ad` datasets into `data/`.
-- `notebooks/01_integrated_pipeline.ipynb`: tune parameters, save them, embed, save the embedded AnnData file, and plot in one workflow.
+- `notebooks/05_integrated_pipeline.ipynb`: tune parameters, save them, embed, save the embedded AnnData file, and plot in one workflow.
 - `notebooks/01_latent_bayesopt.ipynb`: optimize preprocessing PCA and graph parameters, then save them to `data/optimized_params/`.
 - `notebooks/02_visualize_embedding.ipynb`: load optimized preprocessing and graph parameters, embed in 2D, plot, and save the embedded AnnData.
 - `notebooks/03_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.

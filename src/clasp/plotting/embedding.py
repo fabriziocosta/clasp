@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import anndata as ad
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,6 +43,33 @@ def _plot_order(n_obs: int, *, shuffle: bool, random_state: int | None) -> np.nd
         rng = np.random.default_rng(random_state)
         rng.shuffle(order)
     return order
+
+
+def _save_figure(
+    fig,
+    filename: str | Path | None,
+    *,
+    dpi: int,
+    savefig_kwargs: dict | None,
+) -> Path | None:
+    if filename is None:
+        return None
+
+    path = Path(filename)
+    if not path.suffix:
+        path = path.with_suffix(".png")
+    if path.parent != Path("."):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    kwargs = {
+        "dpi": dpi,
+        "bbox_inches": "tight",
+        "facecolor": "white",
+    }
+    if savefig_kwargs:
+        kwargs.update(savefig_kwargs)
+    fig.savefig(path, **kwargs)
+    return path
 
 
 def _plot_embedding_on_axis(
@@ -93,16 +122,23 @@ def plot_embedding(
     embedding_key: str = "X_clasp",
     color_key: str = "batch",
     ax=None,
+    filename: str | Path | None = None,
+    save_dpi: int = 300,
+    savefig_kwargs: dict | None = None,
     s: float = 12,
     alpha: float = 0.85,
     shuffle: bool = True,
     random_state: int | None = 0,
     legend_markerscale: float = 2.5,
 ):
-    """Plot a 2D embedding stored in `adata.obsm` colored by an obs column."""
+    """Plot a 2D embedding stored in `adata.obsm` colored by an obs column.
+
+    When `filename` is provided, the figure is also saved. Paths without a
+    suffix are saved as high-resolution PNG files.
+    """
     if ax is None:
         _, ax = plt.subplots(figsize=(6, 5))
-    return _plot_embedding_on_axis(
+    plotted_ax = _plot_embedding_on_axis(
         adata,
         embedding_key=embedding_key,
         color_key=color_key,
@@ -115,6 +151,8 @@ def plot_embedding(
         order=_plot_order(adata.n_obs, shuffle=shuffle, random_state=random_state),
         legend_markerscale=legend_markerscale,
     )
+    _save_figure(plotted_ax.figure, filename, dpi=save_dpi, savefig_kwargs=savefig_kwargs)
+    return plotted_ax
 
 
 def plot_embedding_pair(
@@ -124,7 +162,10 @@ def plot_embedding_pair(
     batch_key: str = "batch",
     label_key: str = "label",
     axes=None,
-    figsize: tuple[float, float] = (12, 5),
+    figsize: tuple[float, float] = (15, 5),
+    filename: str | Path | None = None,
+    save_dpi: int = 300,
+    savefig_kwargs: dict | None = None,
     s: float = 12,
     alpha: float = 0.85,
     batch_palette: str | list | dict | None = "viridis",
@@ -137,7 +178,8 @@ def plot_embedding_pair(
 
     The default palettes mirror the paper-style qualitative figures: viridis
     for ordered batch/time slices and a high-contrast categorical palette for
-    cell-type labels.
+    cell-type labels. When `filename` is provided, the figure is also saved.
+    Paths without a suffix are saved as high-resolution PNG files.
     """
     if axes is None:
         _, axes = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
@@ -172,4 +214,5 @@ def plot_embedding_pair(
         order=order,
         legend_markerscale=legend_markerscale,
     )
+    _save_figure(axes[0].figure, filename, dpi=save_dpi, savefig_kwargs=savefig_kwargs)
     return axes
