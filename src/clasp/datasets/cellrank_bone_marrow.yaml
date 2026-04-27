@@ -9,7 +9,6 @@ download:
   kind: url
   filename: cellrank-bone-marrow.h5ad
   url: https://ndownloader.figshare.com/files/35826944
-  function: bone_marrow
 preprocess:
   normalize: false
   hvg_flavor: variance

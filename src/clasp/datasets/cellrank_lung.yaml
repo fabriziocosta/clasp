@@ -9,7 +9,6 @@ download:
   kind: url
   filename: cellrank-lung.h5ad
   url: https://ndownloader.figshare.com/files/25038224
-  function: lung
 preprocess:
   normalize: false
   hvg_flavor: variance

@@ -154,6 +154,16 @@ def test_paper_dataset_download_manifest_is_complete():
     assert set(manifest["kind"]).issubset({"url", "figshare"})
 
 
+def test_download_registry_uses_direct_sources():
+    for name, entry in DOWNLOAD_REGISTRY.items():
+        assert entry["kind"] in {"url", "figshare"}
+        assert "function" not in entry, name
+        if entry["kind"] == "url":
+            assert entry["url"].startswith(("http://", "https://"))
+        else:
+            assert "article_id" in entry
+
+
 def test_manual_paper_dataset_list_documents_unresolved_sources():
     assert PAPER_DATASETS_REQUIRING_MANUAL_CURATION
     for row in PAPER_DATASETS_REQUIRING_MANUAL_CURATION:

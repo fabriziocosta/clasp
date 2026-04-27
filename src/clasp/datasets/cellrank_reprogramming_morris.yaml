@@ -9,7 +9,6 @@ download:
   kind: url
   filename: cellrank-reprogramming-morris.h5ad
   url: https://ndownloader.figshare.com/files/25503773
-  function: reprogramming_morris
 preprocess:
   normalize: false
   hvg_flavor: variance

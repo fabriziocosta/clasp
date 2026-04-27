@@ -707,21 +707,6 @@ def figshare_download_url(article_id: int, *, preferred_file: str | None = None)
     raise ValueError(f"Could not choose a Figshare file from: {[file_info.get('name') for file_info in files]}")
 
 
-def download_cellrank_dataset(function_name: str, output_path: str | Path, *, overwrite: bool = False) -> Path:
-    output_path = Path(output_path)
-    if output_path.exists() and not overwrite:
-        print(f"exists: {output_path}")
-        return output_path
-    try:
-        import cellrank as cr
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "cellrank"])
-        import cellrank as cr
-    getattr(cr.datasets, function_name)(path=str(output_path))
-    print(f"saved: {output_path}")
-    return output_path
-
-
 def download_datasets(selected_datasets, *, data_dir: str | Path, overwrite: bool = False) -> dict[str, Path]:
     data_dir = Path(data_dir)
     data_dir.mkdir(exist_ok=True)
@@ -734,8 +719,6 @@ def download_datasets(selected_datasets, *, data_dir: str | Path, overwrite: boo
         elif dataset["kind"] == "figshare":
             url = figshare_download_url(dataset["article_id"], preferred_file=dataset.get("preferred_file"))
             path = download_file(url, output_path, overwrite=overwrite)
-        elif dataset["kind"] == "cellrank":
-            path = download_cellrank_dataset(dataset["function"], output_path, overwrite=overwrite)
         else:
             raise ValueError(f"Unknown dataset kind: {dataset['kind']}")
         downloaded[name] = path

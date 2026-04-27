@@ -9,7 +9,6 @@ download:
   kind: url
   filename: cellrank-reprogramming-schiebinger.h5ad
   url: https://ndownloader.figshare.com/files/28618734
-  function: reprogramming_schiebinger
 preprocess:
   normalize: false
   hvg_flavor: variance

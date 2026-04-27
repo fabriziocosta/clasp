@@ -57,10 +57,11 @@ The rest of the pipeline should use this returned `dataset` object rather than h
 The intended notebook order is:
 
 1. `00_download_datasets.ipynb`: download configured datasets.
-2. `01_latent_bayesopt.ipynb`: optimize preprocessing, estimator, and graph parameters for one selected dataset.
-3. `02_visualize_embedding.ipynb`: load saved parameters, run CLASP, save the embedded `.h5ad`, and plot batch/label panels.
-4. `03_evaluate_embedding.ipynb`: compute integration metrics for an embedded dataset.
-5. `04_assignment_quantile_sweep.ipynb`: run small one-parameter sweeps for visual diagnostics.
+2. `00_1_optimize_all_datasets.ipynb`: optimize preprocessing, estimator, and graph parameters for all paper datasets.
+3. `01_latent_bayesopt.ipynb`: optimize preprocessing, estimator, and graph parameters for one selected dataset.
+4. `02_visualize_embedding.ipynb`: load saved parameters, run CLASP, save the embedded `.h5ad`, and plot batch/label panels.
+5. `03_evaluate_embedding.ipynb`: compute integration metrics for an embedded dataset.
+6. `04_assignment_quantile_sweep.ipynb`: run small one-parameter sweeps for visual diagnostics.
 
 The common pattern is:
 
@@ -77,7 +78,6 @@ Download metadata comes from the `download` block in the dataset YAML. `download
 
 - `kind: url`
 - `kind: figshare`
-- `kind: cellrank`
 
 The paper download notebook uses `PAPER_DATASET_DOWNLOADS`, which is a curated list of dataset names. The helper resolves each name to YAML metadata, downloads into `data/`, and returns a mapping from dataset name to local path.
 
@@ -275,7 +275,7 @@ $$
 - 0.05 \cdot \mathrm{graph\_density}
 $$
 
-The optimizer first runs PCA latent BO. Optional GPLVM refinement can then search a compact space around the PCA best parameters. The compact search is controlled by `compact_radii`, which defines the local radius around each best numeric parameter.
+The optimizers first run PCA latent BO. Optional GPLVM refinement can then search a compact space around the PCA best parameters. The compact search is controlled by `compact_radii`, which defines the local radius around each best numeric parameter.
 
 The best settings are saved to:
 

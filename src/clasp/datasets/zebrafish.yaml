@@ -9,7 +9,6 @@ download:
   kind: url
   filename: cellrank-zebrafish.h5ad
   url: https://ndownloader.figshare.com/files/27265280
-  function: zebrafish
 preprocess:
   normalize: false
   hvg_flavor: variance

@@ -9,7 +9,6 @@ download:
   kind: url
   filename: cellrank-pancreas.h5ad
   url: https://ndownloader.figshare.com/files/25060877
-  function: pancreas
 preprocess:
   normalize: false
   hvg_flavor: variance

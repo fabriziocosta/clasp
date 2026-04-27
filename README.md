@@ -122,6 +122,7 @@ Optional:
 ## Notebooks
 
 - `notebooks/00_download_datasets.ipynb`: download registered `.h5ad` datasets into `data/`.
+- `notebooks/00_1_optimize_all_datasets.ipynb`: run PCA latent BO plus GPLVM refinement for all paper datasets and save optimized configs.
 - `notebooks/05_integrated_pipeline.ipynb`: tune parameters, save them, embed, save the embedded AnnData file, and plot in one workflow.
 - `notebooks/01_latent_bayesopt.ipynb`: optimize preprocessing PCA and graph parameters, then save them to `data/optimized_params/`.
 - `notebooks/02_visualize_embedding.ipynb`: load optimized preprocessing and graph parameters, embed in 2D, plot, and save the embedded AnnData.
