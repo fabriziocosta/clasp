@@ -217,16 +217,6 @@ def test_estimator_graph_to_embeddings_accepts_call_overrides(toy_adata):
     assert coords.shape == (adata.n_obs, 3)
 
 
-def test_estimator_graph_to_vector_alias_remains_available(toy_adata):
-    estimator = ClaspEstimator(n_components=6, embedding_method="spectral")
-    adata = estimator.preprocess(toy_adata, n_top_genes=None)
-    graph = estimator.data_to_graph(adata)
-
-    coords = estimator.graph_to_vector(graph, method="spectral")
-
-    assert coords.shape == (adata.n_obs, 2)
-
-
 def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
     estimator = ClaspEstimator(n_components=6, n_neighbors=6, embedding_method="spectral")
     adata = estimator.preprocess(toy_adata, n_top_genes=None)

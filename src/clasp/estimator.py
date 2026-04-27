@@ -495,24 +495,6 @@ class ClaspEstimator:
             **kwargs,
         )
 
-    def graph_to_vector(
-        self,
-        graph: sparse.spmatrix,
-        *,
-        method: str | None = None,
-        n_components: int | None = None,
-        random_state: int | None = None,
-        **kwargs,
-    ) -> np.ndarray:
-        """Deprecated alias for `graph_to_embeddings`."""
-        return self.graph_to_embeddings(
-            graph,
-            method=method,
-            n_components=n_components,
-            random_state=random_state,
-            **kwargs,
-        )
-
     def embed(
         self,
         adata: ad.AnnData,

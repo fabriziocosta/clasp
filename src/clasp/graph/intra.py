@@ -23,7 +23,7 @@ def _select_edges(distances: np.ndarray, *, n_edges: int) -> tuple[np.ndarray, n
     return rows[keep], cols[keep], vals[keep]
 
 
-def _legacy_rank_correction(neighbor_mode: str, rank_correction: bool) -> bool:
+def _effective_rank_correction(neighbor_mode: str, rank_correction: bool) -> bool:
     if neighbor_mode == "rank":
         return True
     if neighbor_mode == "distance":
@@ -46,7 +46,7 @@ def build_intra_batch_graph(
     """Build a symmetric within-batch kNN connectivity graph."""
     n_neighbors = _coerce_int(n_neighbors, name="n_neighbors", minimum=0)
     hubness_k = _coerce_int(hubness_k, name="hubness_k", minimum=1)
-    rank_correction = _legacy_rank_correction(neighbor_mode, rank_correction)
+    rank_correction = _effective_rank_correction(neighbor_mode, rank_correction)
     n_obs = X.shape[0]
     if n_obs == 0:
         return sparse.csr_matrix((0, 0), dtype=np.float32)

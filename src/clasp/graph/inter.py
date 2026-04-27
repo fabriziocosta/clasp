@@ -121,7 +121,7 @@ def build_inter_batch_graph(
 
     In the default ``propagate_neighbors`` mode, each retained assigned cell in
     ``X_left`` inherits nearest-neighbor edges from its assigned partner in
-    ``X_right``. The assigned pair itself is not linked directly. The legacy
+    ``X_right``. The assigned pair itself is not linked directly. The
     ``assignment`` mode links each retained assigned pair directly.
     """
     n_neighbors = _coerce_int(n_neighbors, name="n_neighbors", minimum=0)

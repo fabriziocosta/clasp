@@ -172,7 +172,7 @@ $$ k_{\mathrm{inter}} = n_{\mathrm{neighbors}} - \left\lceil n_{\mathrm{neighbor
 
 This makes `n_neighbors` a total neighborhood scale split between within-batch kNN edges and propagated cross-batch neighbor edges.
 
-The legacy direct-assignment behavior is still available with `inter_edge_mode="assignment"`. In that mode, surviving assignment edges are weighted as:
+Direct-assignment behavior is available with `inter_edge_mode="assignment"`. In that mode, surviving assignment edges are weighted as:
 
 $$
 w_{i,\pi(i)} =
@@ -394,7 +394,7 @@ function BUILD_INTER_BATCH_GRAPH(
 - `hubness_correction`: distance correction applied before neighbor selection and assignment. Options: `csls`, `none`. Default: `csls`.
 - `hubness_k`: local neighborhood size used by CSLS. Default: `10`.
 - `edge_weighting`: how retained graph edges are weighted. Options: `binary`, `distance`. Notebook default: `binary`; library default: `distance`.
-- `inter_edge_mode`: cross-batch edge construction. `propagate_neighbors` inherits neighbors from assigned partners and is the default. `assignment` keeps the legacy direct assigned-pair edges.
+- `inter_edge_mode`: cross-batch edge construction. `propagate_neighbors` inherits neighbors from assigned partners and is the default. `assignment` keeps direct assigned-pair edges.
 - `mutual_neighbors`: whether within-batch kNN edges must be reciprocal. Default: `true`.
 - `neighbor_mode`: score used for within-batch kNN selection. Options: `rank`, `distance`. Default: `rank`.
 - `symmetrize`: whether to make the assembled graph symmetric. Default: `true`.

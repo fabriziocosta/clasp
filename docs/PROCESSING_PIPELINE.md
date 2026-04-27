@@ -193,7 +193,7 @@ The number of propagated cross-batch neighbors is:
 
 $$ k_{\mathrm{inter}} = n_{\mathrm{neighbors}} - k_{\mathrm{intra}} $$
 
-Set `inter_edge_mode="assignment"` to recover the legacy behavior that links retained assigned pairs directly.
+Set `inter_edge_mode="assignment"` to link retained assigned pairs directly.
 
 Key parameters:
 
