@@ -28,6 +28,7 @@ The preprocessing and graph builder expose several interacting parameters:
 - `hubness_k`
 - `rank_correction`
 - `edge_weighting`
+- `inter_edge_mode`
 - `mutual_neighbors`
 
 Direct Bayesian optimization over this mixed space is expensive and brittle, especially when categorical and integer parameters are present. Latent Bayesian optimization uses an encoder/decoder between the original hyperparameter space and a lower-dimensional continuous space:
@@ -61,6 +62,7 @@ search_space = {
     "hubness_k": {"type": "int", "bounds": [3, 30]},
     "rank_correction": {"type": "categorical", "values": [False, True]},
     "edge_weighting": {"type": "categorical", "values": ["binary", "distance"]},
+    "inter_edge_mode": {"type": "categorical", "values": ["propagate_neighbors", "assignment"]},
     "mutual_neighbors": {"type": "categorical", "values": [False, True]},
 }
 ```

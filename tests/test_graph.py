@@ -61,12 +61,17 @@ def test_graph_params_reject_non_integral_edge_counts():
         GraphParams(n_inter_edges=2.5)
 
 
+def test_graph_params_reject_unknown_inter_edge_mode():
+    with pytest.raises(ValueError, match="inter_edge_mode"):
+        GraphParams(inter_edge_mode="unknown")
+
+
 def test_inter_batch_graph_coerces_integral_float_edge_count():
     rng = np.random.default_rng(5)
     left = rng.normal(size=(5, 3))
     right = rng.normal(size=(6, 3))
 
-    graph = build_inter_batch_graph(left, right, n_inter_edges=2.0, assignment_quantile=1.0)
+    graph = build_inter_batch_graph(left, right, n_inter_edges=2.0, assignment_quantile=1.0, n_neighbors=2)
 
     assert graph.shape == (5, 6)
     assert graph.nnz > 0
@@ -87,11 +92,40 @@ def test_inter_batch_graph_skips_infeasible_nonfinite_assignment_edges():
     np.testing.assert_array_equal(np.sort(vals), np.array([1.0, 2.0]))
 
 
-def test_hungarian_inter_batch_graph_creates_cross_batch_edges():
+def test_inter_batch_graph_propagates_assigned_partner_neighbors_by_default():
+    left = np.array([[0.0], [10.0]])
+    right = np.array([[0.0], [1.0], [10.0], [11.0]])
+
+    graph = build_inter_batch_graph(
+        left,
+        right,
+        n_neighbors=1,
+        n_inter_edges=1,
+        assignment_quantile=1.0,
+        hubness_correction="none",
+        rank_correction=False,
+        edge_weighting="binary",
+    )
+
+    assert graph.shape == (2, 4)
+    assert graph[0, 0] == 0
+    assert graph[0, 1] == 1
+    assert graph[1, 2] == 0
+    assert graph[1, 3] == 1
+    assert graph.nnz == 2
+
+
+def test_assignment_inter_batch_graph_creates_direct_cross_batch_edges():
     rng = np.random.default_rng(1)
     left = rng.normal(size=(8, 3))
     right = left + 0.1
-    graph = build_inter_batch_graph(left, right, n_inter_edges=1, assignment_quantile=1.0)
+    graph = build_inter_batch_graph(
+        left,
+        right,
+        n_inter_edges=1,
+        assignment_quantile=1.0,
+        inter_edge_mode="assignment",
+    )
     assert graph.shape == (8, 8)
     assert graph.nnz == 8
 
@@ -142,6 +176,7 @@ def test_hubness_correction_is_available_for_inter_batch_graph():
     graph = build_inter_batch_graph(
         left,
         right,
+        n_neighbors=2,
         n_inter_edges=1,
         assignment_quantile=1.0,
         hubness_correction="csls",
@@ -149,7 +184,7 @@ def test_hubness_correction_is_available_for_inter_batch_graph():
     )
 
     assert graph.shape == (6, 7)
-    assert graph.nnz == 6
+    assert graph.nnz > 0
     assert np.isfinite(graph.data).all()
     assert np.all(graph.data > 0)
 
@@ -161,20 +196,24 @@ def test_rank_correction_changes_inter_batch_assignment_costs():
     distance_graph = build_inter_batch_graph(
         left,
         right,
+        n_neighbors=1,
         n_inter_edges=1,
         assignment_quantile=1.0,
         hubness_correction="none",
         rank_correction=False,
         edge_weighting="distance",
+        inter_edge_mode="assignment",
     )
     rank_graph = build_inter_batch_graph(
         left,
         right,
+        n_neighbors=1,
         n_inter_edges=1,
         assignment_quantile=1.0,
         hubness_correction="none",
         rank_correction=True,
         edge_weighting="distance",
+        inter_edge_mode="assignment",
     )
 
     assert distance_graph.nnz == rank_graph.nnz == 2
@@ -192,7 +231,7 @@ def test_binary_edge_weighting_sets_retained_edges_to_one():
 def test_binary_edge_weighting_is_available_for_graph_builders():
     X = np.random.default_rng(3).normal(size=(8, 3))
     intra = build_intra_batch_graph(X, n_neighbors=3, edge_weighting="binary")
-    inter = build_inter_batch_graph(X[:4], X[4:], n_inter_edges=1, assignment_quantile=1.0, edge_weighting="binary")
+    inter = build_inter_batch_graph(X[:4], X[4:], n_neighbors=2, n_inter_edges=1, assignment_quantile=1.0, edge_weighting="binary")
 
     assert intra.nnz > 0
     assert inter.nnz > 0

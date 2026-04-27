@@ -161,7 +161,7 @@ adata.obsm["X_clasp"] = estimator.embed(adata, **graph_params)
 The graph builder first validates that `adata.obs[batch_key]` and `adata.obsm[rep_key]` exist. It then splits cells by batch and builds a block sparse graph:
 
 - diagonal blocks: within-batch neighbor graphs
-- off-diagonal blocks: cross-batch assignment graphs
+- off-diagonal blocks: cross-batch graphs derived from linear assignment
 
 ### Within-Batch Edges
 
@@ -185,13 +185,25 @@ Options include:
 
 ### Cross-Batch Edges
 
-For each pair of batches, CLASP computes pairwise distances in representation space, optionally applies CSLS and rank correction, then solves repeated linear assignment problems. This creates sparse one-to-one style cross-batch links instead of allowing one cell to become a hub for many cells.
+For each pair of batches, CLASP computes pairwise distances in representation space, optionally applies CSLS and rank correction, then solves repeated linear assignment problems. The retained assignments define reliable cross-batch partners without allowing one cell to become a hub for many cells.
+
+The default `inter_edge_mode="propagate_neighbors"` does not add direct assignment edges. If cell `x_i` in one batch is assigned to `x_j` in the other batch, `x_i` is linked to the nearest neighbors of `x_j` inside `x_j`'s batch, using those neighbor distances as the edge distances. The assigned pair itself is linked only if it appears through this propagated local-neighbor graph.
+
+The number of propagated cross-batch neighbors is:
+
+$$
+k_{\mathrm{inter}} =
+n_{\mathrm{neighbors}} - k_{\mathrm{intra}}
+$$
+
+Set `inter_edge_mode="assignment"` to recover the legacy behavior that links retained assigned pairs directly.
 
 Key parameters:
 
 - `n_inter_edges`: number of repeated assignment passes.
 - `assignment_quantile`: keeps only confident assignments below the selected distance quantile.
 - `hubness_k`: local neighborhood size for CSLS scaling.
+- `inter_edge_mode`: `"propagate_neighbors"` for default neighbor inheritance, or `"assignment"` for direct assigned-pair edges.
 
 The final graph is assembled with `scipy.sparse.bmat`, symmetrized if requested, and reordered back to the original AnnData cell order. Metadata about graph parameters, batch order, edge counts, and runtime is stored in:
 
@@ -247,7 +259,7 @@ Notebook 01 optimizes a mixed parameter space containing:
 
 - preprocessing parameters, such as `n_top_genes`
 - estimator parameters, such as PCA `n_components`
-- graph parameters, such as `n_neighbors`, `assignment_quantile`, and `edge_weighting`
+- graph parameters, such as `n_neighbors`, `assignment_quantile`, `edge_weighting`, and `inter_edge_mode`
 
 The objective:
 

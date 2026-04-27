@@ -164,7 +164,23 @@ This creates one-to-one matches between cells from the two batches. If `n_inter_
 
 Assignments can be filtered with `assignment_quantile`. For example, `0.95` drops the worst 5% of assignment distances for each batch pair.
 
-Surviving assignment edges are weighted as:
+By default, CLASP does not add the surviving assignment edge directly. Instead, for each retained assignment from `x_i` in the left batch to `x_j` in the right batch, `x_i` inherits the nearest neighbors of `x_j` inside the right batch. The inherited edges use the right-batch neighbor distances as their weights, as if those cells were direct neighbors of `x_i`. The direct `x_i` to `x_j` edge appears only if `x_j` is selected through this local-neighbor propagation.
+
+The number of inherited cross-batch neighbors is:
+
+$$
+k_{\mathrm{inter}}
+=
+n_{\mathrm{neighbors}}
+-
+\left\lceil
+n_{\mathrm{neighbors}} \cdot \rho_{\mathrm{intra}}
+\right\rceil
+$$
+
+This makes `n_neighbors` a total neighborhood scale split between within-batch kNN edges and propagated cross-batch neighbor edges.
+
+The legacy direct-assignment behavior is still available with `inter_edge_mode="assignment"`. In that mode, surviving assignment edges are weighted as:
 
 $$
 w_{i,\pi(i)} =
@@ -220,6 +236,7 @@ function BUILD_CLASP_GRAPH(
 
     intra_neighbors = ceil(n_neighbors * intra_fraction)
     initialize block matrix blocks[m][m]
+    inter_neighbors = n_neighbors - intra_neighbors
 
     for each batch i:
         blocks[i][i] = BUILD_INTRA_BATCH_GRAPH(
@@ -237,15 +254,31 @@ function BUILD_CLASP_GRAPH(
         cross = BUILD_INTER_BATCH_GRAPH(
             X_batches[i],
             X_batches[j],
+            n_neighbors = inter_neighbors,
             n_inter_edges = n_inter_edges,
             metric = metric,
             assignment_quantile = assignment_quantile,
             hubness_correction = hubness_correction,
             hubness_k = hubness_k,
-            edge_weighting = edge_weighting
+            edge_weighting = edge_weighting,
+            inter_edge_mode = inter_edge_mode
         )
         blocks[i][j] = cross
-        blocks[j][i] = transpose(cross)
+        if inter_edge_mode == "assignment":
+            blocks[j][i] = transpose(cross)
+        else:
+            blocks[j][i] = BUILD_INTER_BATCH_GRAPH(
+                X_batches[j],
+                X_batches[i],
+                n_neighbors = inter_neighbors,
+                n_inter_edges = n_inter_edges,
+                metric = metric,
+                assignment_quantile = assignment_quantile,
+                hubness_correction = hubness_correction,
+                hubness_k = hubness_k,
+                edge_weighting = edge_weighting,
+                inter_edge_mode = inter_edge_mode
+            )
 
     G = sparse_block_matrix(blocks)
     remove diagonal entries from G
@@ -319,7 +352,8 @@ function BUILD_INTER_BATCH_GRAPH(
     assignment_quantile,
     hubness_correction,
     hubness_k,
-    edge_weighting
+    edge_weighting,
+    inter_edge_mode
 ):
     if either batch is empty or n_inter_edges <= 0:
         return empty sparse graph
@@ -339,10 +373,20 @@ function BUILD_INTER_BATCH_GRAPH(
         cutoff = quantile(assignment_distances, assignment_quantile)
         keep only assignments with distance <= cutoff
 
-    if edge_weighting == "binary":
-        weight each assignment as 1
+    if inter_edge_mode == "propagate_neighbors":
+        R = pairwise_distances(X_right, X_right, metric)
+        set diagonal of R to infinity
+        apply hubness/rank correction to R
+        for each retained assignment row i to column j:
+            add edges from i to the n_neighbors nearest non-self neighbors of j in X_right
+            use the corresponding R[j, neighbor] distances for edge weights
     else:
-        weight each assignment as 1 / (1 + shifted_corrected_distance)
+        add direct assignment edges from rows to cols
+
+    if edge_weighting == "binary":
+        weight each retained edge as 1
+    else:
+        weight each retained edge as 1 / (1 + shifted_corrected_distance)
     return sparse bipartite graph from X_left to X_right
 ```
 
@@ -358,13 +402,14 @@ function BUILD_INTER_BATCH_GRAPH(
 - `hubness_correction`: distance correction applied before neighbor selection and assignment. Options: `csls`, `none`. Default: `csls`.
 - `hubness_k`: local neighborhood size used by CSLS. Default: `10`.
 - `edge_weighting`: how retained graph edges are weighted. Options: `binary`, `distance`. Notebook default: `binary`; library default: `distance`.
+- `inter_edge_mode`: cross-batch edge construction. `propagate_neighbors` inherits neighbors from assigned partners and is the default. `assignment` keeps the legacy direct assigned-pair edges.
 - `mutual_neighbors`: whether within-batch kNN edges must be reciprocal. Default: `true`.
 - `neighbor_mode`: score used for within-batch kNN selection. Options: `rank`, `distance`. Default: `rank`.
 - `symmetrize`: whether to make the assembled graph symmetric. Default: `true`.
 
 ## Expected Behavior
 
-When batches share overlapping cell types, cross-batch assignment edges should connect corresponding populations and improve batch mixing. When batches contain non-overlapping states, the assignment quantile should prune the weakest matches and reduce forced alignment.
+When batches share overlapping cell types, propagated cross-batch edges should connect corresponding local neighborhoods and improve batch mixing. When batches contain non-overlapping states, the assignment quantile should prune the weakest matches and reduce forced alignment.
 
 The most important tradeoff is controlled by the cross-batch filtering threshold:
 

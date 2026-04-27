@@ -1,8 +1,8 @@
-# clasp
+# CLASP
 
 **CLASP** stands for **Cell integration via Linear Assignment and Sparse Pairing**.
 
-`clasp` is a small, dependency-light implementation of the CLASP idea: integrate batches of single-cell data by combining within-batch nearest-neighbor edges with cross-batch Hungarian assignment edges, then embed and score the resulting graph.
+`clasp` is a small, dependency-light implementation of the CLASP idea: integrate batches of single-cell data by combining within-batch nearest-neighbor edges with cross-batch edges derived from Hungarian assignment, then embed and score the resulting graph.
 
 The required interface is an in-memory `AnnData` object or a `.h5ad` file.
 
@@ -85,6 +85,9 @@ graph = estimator.data_to_graph(
     hubness_k=10,
     # Use binary for paper-compatible graph connectivity, or distance for weighted edges.
     edge_weighting="binary",
+    # Default: use assigned cross-batch partners to inherit their local neighbors.
+    # Use "assignment" to link retained assigned pairs directly instead.
+    inter_edge_mode="propagate_neighbors",
     # Retain within-batch kNN edges only when the neighbor relation is reciprocal.
     mutual_neighbors=True,
     # Use reciprocal rank scores, rather than raw distances, for within-batch kNN selection.

@@ -231,6 +231,7 @@ def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
         hubness_k=3,
         rank_correction=False,
         edge_weighting="binary",
+        inter_edge_mode="assignment",
         mutual_neighbors=False,
         neighbor_mode="distance",
         symmetrize=False,
@@ -246,6 +247,7 @@ def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
     assert params["hubness_k"] == 3
     assert params["rank_correction"] is False
     assert params["edge_weighting"] == "binary"
+    assert params["inter_edge_mode"] == "assignment"
     assert params["mutual_neighbors"] is False
     assert params["neighbor_mode"] == "distance"
     assert params["symmetrize"] is False
@@ -273,6 +275,7 @@ def test_estimator_embed_accepts_graph_overrides(toy_adata):
         hubness_k=3,
         rank_correction=False,
         edge_weighting="binary",
+        inter_edge_mode="assignment",
         mutual_neighbors=False,
         neighbor_mode="distance",
         embedding_method="spectral",
@@ -284,6 +287,7 @@ def test_estimator_embed_accepts_graph_overrides(toy_adata):
     assert adata.uns["clasp"]["graph"]["parameters"]["hubness_correction"] == "none"
     assert adata.uns["clasp"]["graph"]["parameters"]["rank_correction"] is False
     assert adata.uns["clasp"]["graph"]["parameters"]["edge_weighting"] == "binary"
+    assert adata.uns["clasp"]["graph"]["parameters"]["inter_edge_mode"] == "assignment"
     assert adata.uns["clasp"]["graph"]["parameters"]["mutual_neighbors"] is False
     assert adata.uns["clasp"]["graph"]["parameters"]["neighbor_mode"] == "distance"
 

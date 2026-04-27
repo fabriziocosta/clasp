@@ -38,6 +38,7 @@ DEFAULT_GRAPH_PARAMS = {
     "hubness_k": 10,
     "rank_correction": True,
     "edge_weighting": "distance",
+    "inter_edge_mode": "propagate_neighbors",
     "mutual_neighbors": False,
     "neighbor_mode": "distance",
     "symmetrize": True,

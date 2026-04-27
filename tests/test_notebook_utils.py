@@ -49,6 +49,7 @@ def test_optimization_helpers_split_and_compact():
     graph_space = {
         "n_neighbors": {"type": "int", "bounds": [5, 40]},
         "edge_weighting": {"type": "categorical", "values": ["binary", "distance"]},
+        "inter_edge_mode": {"type": "categorical", "values": ["propagate_neighbors", "assignment"]},
     }
 
     search_space = optimization_search_space(
@@ -63,6 +64,7 @@ def test_optimization_helpers_split_and_compact():
             "n_components": 80,
             "n_neighbors": 33,
             "edge_weighting": "distance",
+            "inter_edge_mode": "propagate_neighbors",
         },
         {"n_top_genes": 500, "n_components": 20, "n_neighbors": 5},
     )
@@ -71,6 +73,7 @@ def test_optimization_helpers_split_and_compact():
     assert compact["n_components"]["bounds"] == [60, 100]
     assert compact["n_neighbors"]["bounds"] == [28, 38]
     assert compact["edge_weighting"]["values"] == ["distance"]
+    assert compact["inter_edge_mode"]["values"] == ["propagate_neighbors"]
 
     preprocess, estimator, graph = split_optimization_params(
         {"n_top_genes": 1000, "n_components": 50, "n_neighbors": 10},

@@ -27,6 +27,7 @@ def build_clasp_graph(
     hubness_k: int = 10,
     rank_correction: bool = True,
     edge_weighting: str = "distance",
+    inter_edge_mode: str = "propagate_neighbors",
     mutual_neighbors: bool = True,
     neighbor_mode: str = "distance",
     symmetrize: bool = True,
@@ -42,6 +43,7 @@ def build_clasp_graph(
         hubness_k=hubness_k,
         rank_correction=rank_correction,
         edge_weighting=edge_weighting,
+        inter_edge_mode=inter_edge_mode,
         mutual_neighbors=mutual_neighbors,
         neighbor_mode=neighbor_mode,
         symmetrize=symmetrize,
@@ -54,6 +56,7 @@ def build_clasp_graph(
     batch_arrays = [X[split.indices] for split in splits]
 
     intra_neighbors = int(np.ceil(params.n_neighbors * params.intra_fraction))
+    inter_neighbors = max(0, params.n_neighbors - intra_neighbors)
     blocks: list[list[sparse.csr_matrix | None]] = [[None for _ in splits] for _ in splits]
     intra_edges = 0
     inter_edges = 0
@@ -78,6 +81,7 @@ def build_clasp_graph(
             block = build_inter_batch_graph(
                 batch_arrays[i],
                 batch_arrays[j],
+                n_neighbors=inter_neighbors,
                 n_inter_edges=params.n_inter_edges,
                 metric=params.metric,
                 assignment_quantile=params.assignment_quantile,
@@ -85,10 +89,26 @@ def build_clasp_graph(
                 hubness_k=params.hubness_k,
                 rank_correction=params.rank_correction,
                 edge_weighting=params.edge_weighting,
+                inter_edge_mode=params.inter_edge_mode,
             )
             blocks[i][j] = block
-            blocks[j][i] = block.T.tocsr()
-            inter_edges += block.nnz * 2
+            if params.inter_edge_mode == "assignment":
+                blocks[j][i] = block.T.tocsr()
+            else:
+                blocks[j][i] = build_inter_batch_graph(
+                    batch_arrays[j],
+                    batch_arrays[i],
+                    n_neighbors=inter_neighbors,
+                    n_inter_edges=params.n_inter_edges,
+                    metric=params.metric,
+                    assignment_quantile=params.assignment_quantile,
+                    hubness_correction=params.hubness_correction,
+                    hubness_k=params.hubness_k,
+                    rank_correction=params.rank_correction,
+                    edge_weighting=params.edge_weighting,
+                    inter_edge_mode=params.inter_edge_mode,
+                )
+            inter_edges += block.nnz + blocks[j][i].nnz
 
     graph = sparse.bmat(blocks, format="csr", dtype=np.float32)
     graph.setdiag(0)

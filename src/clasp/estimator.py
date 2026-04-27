@@ -237,6 +237,7 @@ class ClaspEstimator:
     hubness_k: int = 10
     rank_correction: bool = True
     edge_weighting: str = "distance"
+    inter_edge_mode: str = "propagate_neighbors"
     mutual_neighbors: bool = True
     neighbor_mode: str = "distance"
     symmetrize: bool = True
@@ -415,6 +416,7 @@ class ClaspEstimator:
         hubness_k: int | None = None,
         rank_correction: bool | None = None,
         edge_weighting: str | None = None,
+        inter_edge_mode: str | None = None,
         mutual_neighbors: bool | None = None,
         neighbor_mode: str | None = None,
         symmetrize: bool | None = None,
@@ -431,6 +433,7 @@ class ClaspEstimator:
         hubness_k = self.hubness_k if hubness_k is None else hubness_k
         rank_correction = self.rank_correction if rank_correction is None else rank_correction
         edge_weighting = self.edge_weighting if edge_weighting is None else edge_weighting
+        inter_edge_mode = self.inter_edge_mode if inter_edge_mode is None else inter_edge_mode
         mutual_neighbors = self.mutual_neighbors if mutual_neighbors is None else mutual_neighbors
         neighbor_mode = self.neighbor_mode if neighbor_mode is None else neighbor_mode
         symmetrize = self.symmetrize if symmetrize is None else symmetrize
@@ -445,6 +448,7 @@ class ClaspEstimator:
             hubness_k=hubness_k,
             rank_correction=rank_correction,
             edge_weighting=edge_weighting,
+            inter_edge_mode=inter_edge_mode,
             mutual_neighbors=mutual_neighbors,
             neighbor_mode=neighbor_mode,
             symmetrize=symmetrize,
@@ -464,6 +468,7 @@ class ClaspEstimator:
             hubness_k=params.hubness_k,
             rank_correction=params.rank_correction,
             edge_weighting=params.edge_weighting,
+            inter_edge_mode=params.inter_edge_mode,
             mutual_neighbors=params.mutual_neighbors,
             neighbor_mode=params.neighbor_mode,
             symmetrize=params.symmetrize,
@@ -505,6 +510,7 @@ class ClaspEstimator:
         hubness_k: int | None = None,
         rank_correction: bool | None = None,
         edge_weighting: str | None = None,
+        inter_edge_mode: str | None = None,
         mutual_neighbors: bool | None = None,
         neighbor_mode: str | None = None,
         symmetrize: bool | None = None,
@@ -527,6 +533,7 @@ class ClaspEstimator:
             hubness_k=hubness_k,
             rank_correction=rank_correction,
             edge_weighting=edge_weighting,
+            inter_edge_mode=inter_edge_mode,
             mutual_neighbors=mutual_neighbors,
             neighbor_mode=neighbor_mode,
             symmetrize=symmetrize,

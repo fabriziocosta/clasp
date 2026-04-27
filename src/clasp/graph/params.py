@@ -37,6 +37,7 @@ class GraphParams:
     hubness_k: int = 10
     rank_correction: bool = True
     edge_weighting: str = "distance"
+    inter_edge_mode: str = "propagate_neighbors"
     mutual_neighbors: bool = True
     neighbor_mode: str = "distance"
     symmetrize: bool = True
@@ -65,6 +66,8 @@ class GraphParams:
             raise ValueError("rank_correction must be True or False.")
         if self.edge_weighting not in {"distance", "binary"}:
             raise ValueError("edge_weighting must be one of: 'distance', 'binary'.")
+        if self.inter_edge_mode not in {"propagate_neighbors", "assignment"}:
+            raise ValueError("inter_edge_mode must be one of: 'propagate_neighbors', 'assignment'.")
         if self.neighbor_mode not in {"rank", "distance"}:
             raise ValueError("neighbor_mode must be one of: 'rank', 'distance'.")
         if not isinstance(self.mutual_neighbors, bool):
