@@ -351,7 +351,7 @@ def load_preprocessed_data(estimator: ClaspEstimator, dataset: dict, **preproces
 
 def embed_dataset(adata: ad.AnnData, estimator: ClaspEstimator, graph_params: dict) -> ad.AnnData:
     graph = estimator.data_to_graph(adata, **graph_params)
-    adata.obsm["X_clasp"] = estimator.graph_to_vector(graph)
+    adata.obsm["X_clasp"] = estimator.graph_to_embeddings(graph)
     return adata
 
 

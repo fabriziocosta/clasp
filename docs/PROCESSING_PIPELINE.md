@@ -210,10 +210,10 @@ adata.uns["clasp"]["graph"]
 
 ## Embedding
 
-`graph_to_vector(...)` embeds the integrated graph:
+`graph_to_embeddings(...)` embeds the integrated graph:
 
 ```python
-embedding = estimator.graph_to_vector(graph, method="umap", n_components=2)
+embedding = estimator.graph_to_embeddings(graph, method="umap", n_components=2)
 ```
 
 `embed(...)` combines graph construction and embedding:

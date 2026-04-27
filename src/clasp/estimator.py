@@ -474,6 +474,27 @@ class ClaspEstimator:
             symmetrize=params.symmetrize,
         )
 
+    def graph_to_embeddings(
+        self,
+        graph: sparse.spmatrix,
+        *,
+        method: str | None = None,
+        n_components: int | None = None,
+        random_state: int | None = None,
+        **kwargs,
+    ) -> np.ndarray:
+        """Embed a graph and return low-dimensional coordinates."""
+        method = self.embedding_method if method is None else method
+        n_components = self.embedding_components if n_components is None else n_components
+        random_state = self.random_state if random_state is None else random_state
+        return embed_graph(
+            graph,
+            method=method,
+            n_components=n_components,
+            random_state=random_state,
+            **kwargs,
+        )
+
     def graph_to_vector(
         self,
         graph: sparse.spmatrix,
@@ -483,11 +504,8 @@ class ClaspEstimator:
         random_state: int | None = None,
         **kwargs,
     ) -> np.ndarray:
-        """Embed a graph and return low-dimensional vectors."""
-        method = self.embedding_method if method is None else method
-        n_components = self.embedding_components if n_components is None else n_components
-        random_state = self.random_state if random_state is None else random_state
-        return embed_graph(
+        """Deprecated alias for `graph_to_embeddings`."""
+        return self.graph_to_embeddings(
             graph,
             method=method,
             n_components=n_components,
@@ -538,7 +556,7 @@ class ClaspEstimator:
             neighbor_mode=neighbor_mode,
             symmetrize=symmetrize,
         )
-        return self.graph_to_vector(
+        return self.graph_to_embeddings(
             graph,
             method=embedding_method,
             n_components=embedding_components,

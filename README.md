@@ -95,7 +95,7 @@ graph = estimator.data_to_graph(
     # Symmetrize the final graph.
     symmetrize=True,
 )
-adata.obsm["X_clasp"] = estimator.graph_to_vector(graph)
+adata.obsm["X_clasp"] = estimator.graph_to_embeddings(graph)
 scores = score_embedding(adata, embedding_key="X_clasp", batch_key="batch", label_key="label", graph=graph)
 
 estimator.plot(adata, embedding_key="X_clasp")

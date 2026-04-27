@@ -200,21 +200,31 @@ def test_estimator_graph_and_embedding_methods(toy_adata):
     adata = estimator.preprocess(toy_adata, n_top_genes=None)
 
     graph = estimator.data_to_graph(adata)
-    coords = estimator.graph_to_vector(graph)
+    coords = estimator.graph_to_embeddings(graph)
 
     assert sparse.isspmatrix_csr(graph)
     assert graph.shape == (adata.n_obs, adata.n_obs)
     assert coords.shape == (adata.n_obs, 2)
 
 
-def test_estimator_graph_to_vector_accepts_call_overrides(toy_adata):
+def test_estimator_graph_to_embeddings_accepts_call_overrides(toy_adata):
     estimator = ClaspEstimator(n_components=6, embedding_method="spectral")
     adata = estimator.preprocess(toy_adata, n_top_genes=None)
     graph = estimator.data_to_graph(adata)
 
-    coords = estimator.graph_to_vector(graph, method="spectral", n_components=3, random_state=5)
+    coords = estimator.graph_to_embeddings(graph, method="spectral", n_components=3, random_state=5)
 
     assert coords.shape == (adata.n_obs, 3)
+
+
+def test_estimator_graph_to_vector_alias_remains_available(toy_adata):
+    estimator = ClaspEstimator(n_components=6, embedding_method="spectral")
+    adata = estimator.preprocess(toy_adata, n_top_genes=None)
+    graph = estimator.data_to_graph(adata)
+
+    coords = estimator.graph_to_vector(graph, method="spectral")
+
+    assert coords.shape == (adata.n_obs, 2)
 
 
 def test_estimator_data_to_graph_accepts_call_overrides(toy_adata):
