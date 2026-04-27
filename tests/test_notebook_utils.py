@@ -8,9 +8,11 @@ from clasp.notebook_utils import (
     list_dataset_config_files,
     load_optimized_graph_params,
     make_compact_search_space,
+    optimize_dataset_parameters,
     optimization_search_space,
     optimized_params_path,
     paper_dataset_manifest,
+    prepare_visualization_run,
     read_dataset_spec,
     save_best_optimization_result,
     save_optimized_graph_params,
@@ -142,6 +144,26 @@ def test_save_best_optimization_result_allows_pca_only(tmp_path):
     assert "gplvm_best_score" not in payload["metadata"]
 
 
+def test_optimize_dataset_parameters_skips_existing_params(tmp_path):
+    save_optimized_graph_params(
+        "scib_pancreas",
+        {"n_neighbors": 10},
+        preprocess_params={"n_top_genes": 1000},
+        estimator_params={"n_components": 40},
+        metadata={"best_model": "pca", "best_score": 0.5, "pca_best_score": 0.5},
+        project_root=tmp_path,
+    )
+
+    row = optimize_dataset_parameters("scib_pancreas", project_root=tmp_path)
+
+    assert row["status"] == "skipped_existing"
+    assert row["best_model"] == "pca"
+    assert row["best_score"] == 0.5
+    assert row["optimized_preprocess_params"] == {"n_top_genes": 1000}
+    assert row["optimized_estimator_params"] == {"n_components": 40}
+    assert row["optimized_graph_params"] == {"n_neighbors": 10}
+
+
 def test_paper_dataset_download_manifest_is_complete():
     assert PAPER_DATASET_DOWNLOADS
     assert set(PAPER_DATASET_DOWNLOADS).issubset(DOWNLOAD_REGISTRY)
@@ -202,3 +224,18 @@ def test_cellrank_bone_marrow_uses_artificial_batches():
     assert dataset["batch_key"] == "sample"
     assert dataset["label_key"] == "clusters"
     assert dataset["preprocess"]["create_artificial_batch"] is True
+
+
+def test_cellrank_lung_uses_day_batches():
+    dataset = dataset_config("cellrank_lung")
+
+    assert dataset["batch_key"] == "day"
+    assert dataset["label_key"] == "clusters"
+
+
+def test_prepare_visualization_run_uses_current_dataset_batch_key():
+    context = prepare_visualization_run("cellrank_lung", max_cells=100)
+
+    assert context["batch_key"] == "day"
+    assert context["estimator"].batch_key == "day"
+    assert context["preprocess_overrides"]["max_cells"] == 100

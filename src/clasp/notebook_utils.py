@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import traceback
 import urllib.request
 import warnings
 
@@ -366,6 +367,65 @@ def evaluate_dataset(estimator: ClaspEstimator, dataset: dict, *, embedding_key:
     )
 
 
+def prepare_visualization_run(
+    selected_dataset: str,
+    *,
+    project_root: Path | None = None,
+    random_state: int = 0,
+    max_cells: int | None = 6000,
+) -> dict:
+    dataset = dataset_config(selected_dataset, project_root=project_root)
+    optimized_params = load_or_default_params(selected_dataset, dataset, project_root=project_root)
+    preprocess_overrides = {
+        **optimized_params.get("preprocess_params", {}),
+        "max_cells": max_cells,
+    }
+    estimator_params = optimized_params.get("estimator_params", {})
+    estimator = make_estimator(dataset, random_state=random_state, **estimator_params)
+    return {
+        "selected_dataset": selected_dataset,
+        "dataset": dataset,
+        "optimized_params": optimized_params,
+        "preprocess_overrides": preprocess_overrides,
+        "estimator_params": estimator_params,
+        "graph_params": optimized_params["graph_params"],
+        "estimator": estimator,
+        "input_path": dataset["input_path"],
+        "output_path": dataset["output_path"],
+        "batch_key": dataset["batch_key"],
+        "label_key": dataset["label_key"],
+    }
+
+
+def run_embedding_visualization(
+    context: dict,
+    *,
+    save: bool = True,
+    figure_dir: str | Path = "figures",
+) -> tuple[ad.AnnData, dict]:
+    dataset = context["dataset"]
+    estimator = context["estimator"]
+    selected_dataset = context["selected_dataset"]
+
+    adata = load_preprocessed_data(estimator, dataset, **context["preprocess_overrides"])
+    adata = embed_dataset(adata, estimator, context["graph_params"])
+
+    figure_dir = Path(figure_dir)
+    estimator.plot(
+        adata,
+        embedding_key="X_clasp",
+        filename=figure_dir / f"{selected_dataset}_clasp_embedding.pdf",
+    )
+    estimator.plot(
+        adata,
+        embedding_key="X_pca",
+        filename=figure_dir / f"{selected_dataset}_pca_embedding.pdf",
+    )
+    if save:
+        estimator.save(adata, context["output_path"])
+    return adata, context["graph_params"]
+
+
 def split_optimization_params(
     params: dict,
     *,
@@ -566,6 +626,317 @@ def save_best_optimization_result(
         project_root=project_root,
     )
     return path, optimized_preprocess_params, optimized_estimator_params, optimized_graph_params
+
+
+def default_optimization_config(
+    dataset: dict,
+    *,
+    base_n_top_genes: int = 1500,
+    base_estimator_params: dict | None = None,
+    base_graph_params: dict | None = None,
+    preprocess_search_space: dict | None = None,
+    estimator_search_space: dict | None = None,
+    graph_search_space: dict | None = None,
+) -> tuple[dict, dict, dict, dict, dict, dict, dict]:
+    base_preprocess_params = preprocess_params(dataset, n_top_genes=base_n_top_genes)
+    base_estimator_params = {"n_components": 60} if base_estimator_params is None else base_estimator_params.copy()
+    default_graph_params = {
+        **dataset.get("graph", {}),
+        "n_neighbors": 15,
+        "intra_fraction": 0.5,
+        "n_inter_edges": 2,
+        "metric": "euclidean",
+        "assignment_quantile": 0.8,
+        "hubness_correction": "csls",
+        "hubness_k": 10,
+        "rank_correction": True,
+        "edge_weighting": "binary",
+        "mutual_neighbors": False,
+        "neighbor_mode": "distance",
+        "symmetrize": True,
+    }
+    if base_graph_params is not None:
+        default_graph_params.update(base_graph_params)
+    base_graph_params = default_graph_params
+
+    if preprocess_search_space is None:
+        preprocess_search_space = {
+            "n_top_genes": {"type": "int", "bounds": [500, 2000]},
+        }
+    if estimator_search_space is None:
+        estimator_search_space = {
+            "n_components": {"type": "int", "bounds": [20, 100]},
+        }
+    if graph_search_space is None:
+        graph_search_space = {
+            "n_neighbors": {"type": "int", "bounds": [5, 35]},
+            "intra_fraction": {"type": "float", "bounds": [0.2, 0.9]},
+            "n_inter_edges": {"type": "int", "bounds": [1, 6]},
+            "assignment_quantile": {"type": "float", "bounds": [0.1, 1.0]},
+            "hubness_k": {"type": "int", "bounds": [3, 20]},
+            "rank_correction": {"type": "categorical", "values": [False, True]},
+            "edge_weighting": {"type": "categorical", "values": ["binary", "distance"]},
+            "inter_edge_mode": {"type": "categorical", "values": ["propagate_neighbors", "assignment"]},
+            "mutual_neighbors": {"type": "categorical", "values": [False, True]},
+        }
+
+    search_space = optimization_search_space(
+        preprocess_search_space=preprocess_search_space,
+        estimator_search_space=estimator_search_space,
+        graph_search_space=graph_search_space,
+    )
+    return (
+        base_preprocess_params,
+        base_estimator_params,
+        base_graph_params,
+        preprocess_search_space,
+        estimator_search_space,
+        graph_search_space,
+        search_space,
+    )
+
+
+def row_from_optimized_params(dataset_name: str, dataset: dict, *, project_root: Path | None = None) -> dict:
+    params_path = optimized_params_path(dataset_name, project_root=project_root)
+    payload = load_optimized_graph_params(dataset_name, project_root=project_root)
+    metadata = payload.get("metadata", {})
+    return {
+        "dataset": dataset_name,
+        "input_path": str(dataset["input_path"]),
+        "params_path": str(params_path),
+        "status": "skipped_existing",
+        "best_model": metadata.get("best_model"),
+        "best_score": metadata.get("best_score"),
+        "pca_best_score": metadata.get("pca_best_score"),
+        "gplvm_best_score": metadata.get("gplvm_best_score"),
+        "optimized_preprocess_params": payload.get("preprocess_params", {}),
+        "optimized_estimator_params": payload.get("estimator_params", {}),
+        "optimized_graph_params": payload.get("graph_params", {}),
+    }
+
+
+def optimize_dataset_parameters(
+    dataset_name: str,
+    *,
+    project_root: Path | None = None,
+    random_state: int = 0,
+    skip_missing_inputs: bool = True,
+    skip_existing_optimized: bool = True,
+    overwrite_existing: bool = False,
+    run_gplvm_refinement: bool = True,
+    embedding_method: str = "umap",
+    embedding_epochs: int | None = 60,
+    invalid_score: float = -1e9,
+    fixed_preprocess_params: dict | None = None,
+    pca_bo_settings: dict | None = None,
+    gplvm_bo_settings: dict | None = None,
+    compact_radii: dict | None = None,
+    base_n_top_genes: int = 1500,
+    base_estimator_params: dict | None = None,
+    base_graph_params: dict | None = None,
+    preprocess_search_space: dict | None = None,
+    estimator_search_space: dict | None = None,
+    graph_search_space: dict | None = None,
+) -> dict:
+    dataset = dataset_config(dataset_name, project_root=project_root)
+    params_path = optimized_params_path(dataset_name, project_root=project_root)
+    fixed_preprocess_params = {} if fixed_preprocess_params is None else fixed_preprocess_params
+    pca_bo_settings = {
+        "n_initial": 6,
+        "latent_dim": 3,
+        "n_iterations": 12,
+        "embedding_model": "pca",
+        "acquisition": "ei",
+        "batch_size": 1,
+    } if pca_bo_settings is None else pca_bo_settings
+    gplvm_bo_settings = {
+        "n_initial": 6,
+        "latent_dim": 3,
+        "n_iterations": 12,
+        "embedding_model": "gplvm",
+        "acquisition": "ei",
+        "batch_size": 1,
+    } if gplvm_bo_settings is None else gplvm_bo_settings
+    compact_radii = {
+        "n_top_genes": 300,
+        "n_components": 20,
+        "n_neighbors": 6,
+        "intra_fraction": 0.1,
+        "n_inter_edges": 2,
+        "assignment_quantile": 0.15,
+        "hubness_k": 4,
+    } if compact_radii is None else compact_radii
+
+    row = {
+        "dataset": dataset_name,
+        "input_path": str(dataset["input_path"]),
+        "params_path": str(params_path),
+        "status": "pending",
+    }
+
+    if params_path.exists() and skip_existing_optimized and not overwrite_existing:
+        return row_from_optimized_params(dataset_name, dataset, project_root=project_root)
+
+    if not dataset["input_path"].exists():
+        row["status"] = "missing_input"
+        if skip_missing_inputs:
+            return row
+        raise FileNotFoundError(dataset["input_path"])
+
+    (
+        base_preprocess_params,
+        base_estimator_params,
+        base_graph_params,
+        preprocess_search_space,
+        estimator_search_space,
+        graph_search_space,
+        search_space,
+    ) = default_optimization_config(
+        dataset,
+        base_n_top_genes=base_n_top_genes,
+        base_estimator_params=base_estimator_params,
+        base_graph_params=base_graph_params,
+        preprocess_search_space=preprocess_search_space,
+        estimator_search_space=estimator_search_space,
+        graph_search_space=graph_search_space,
+    )
+
+    raw_estimator = make_estimator(dataset, n_components=100, random_state=random_state)
+    raw_adata = raw_estimator.to_data(dataset["input_path"])
+    objective = make_clasp_optimization_objective(
+        dataset=dataset,
+        raw_adata=raw_adata,
+        base_preprocess_params=base_preprocess_params,
+        fixed_preprocess_params=fixed_preprocess_params,
+        base_estimator_params=base_estimator_params,
+        base_graph_params=base_graph_params,
+        preprocess_search_space=preprocess_search_space,
+        estimator_search_space=estimator_search_space,
+        graph_search_space=graph_search_space,
+        random_state=random_state,
+        embedding_method=embedding_method,
+        embedding_epochs=embedding_epochs,
+        invalid_score=invalid_score,
+    )
+
+    try:
+        pca_result = run_latent_bayesopt(
+            objective,
+            search_space,
+            **pca_bo_settings,
+            random_state=random_state,
+            invalid_score=invalid_score,
+        )
+
+        optimization_results = {"pca": pca_result}
+        gplvm_result = None
+        if run_gplvm_refinement:
+            compact_search_space = make_compact_search_space(
+                search_space,
+                pca_result["best_params"],
+                compact_radii,
+                fix_categoricals=True,
+            )
+            gplvm_result = run_latent_bayesopt(
+                objective,
+                compact_search_space,
+                **gplvm_bo_settings,
+                random_state=random_state + 1,
+                invalid_score=invalid_score,
+            )
+            optimization_results["gplvm"] = gplvm_result
+
+        (
+            params_path,
+            optimized_preprocess_params,
+            optimized_estimator_params,
+            optimized_graph_params,
+        ) = save_best_optimization_result(
+            dataset_name=dataset_name,
+            optimization_results=optimization_results,
+            base_preprocess_params=base_preprocess_params,
+            fixed_preprocess_params=fixed_preprocess_params,
+            base_estimator_params=base_estimator_params,
+            base_graph_params=base_graph_params,
+            preprocess_search_space=preprocess_search_space,
+            estimator_search_space=estimator_search_space,
+            graph_search_space=graph_search_space,
+            random_state=random_state,
+            project_root=project_root,
+        )
+
+        best_model = (
+            "gplvm"
+            if gplvm_result is not None and gplvm_result["best_score"] >= pca_result["best_score"]
+            else "pca"
+        )
+        row.update(
+            {
+                "status": "optimized",
+                "best_model": best_model,
+                "best_score": max(result["best_score"] for result in optimization_results.values()),
+                "pca_best_score": pca_result["best_score"],
+                "gplvm_best_score": None if gplvm_result is None else gplvm_result["best_score"],
+                "optimized_preprocess_params": optimized_preprocess_params,
+                "optimized_estimator_params": optimized_estimator_params,
+                "optimized_graph_params": optimized_graph_params,
+            }
+        )
+        return row
+    finally:
+        del raw_adata, raw_estimator, objective
+        gc.collect()
+
+
+def print_optimization_result(row: dict) -> None:
+    print(f"status={row.get('status')}")
+    if row.get("error") is not None:
+        print(f"error={row['error']}")
+    if row.get("best_model") is not None:
+        print(f"best_model={row['best_model']}")
+    for key in ("best_score", "pca_best_score", "gplvm_best_score"):
+        if row.get(key) is not None:
+            print(f"{key}={row[key]}")
+    for key, label in (
+        ("optimized_preprocess_params", "preprocess"),
+        ("optimized_estimator_params", "estimator"),
+        ("optimized_graph_params", "graph"),
+    ):
+        if row.get(key) is not None:
+            print(f"{label} params:")
+            print(json.dumps(row[key], indent=2, sort_keys=True, default=str))
+
+
+def run_dataset_optimization_sweep(
+    selected_datasets,
+    *,
+    summary_path: str | Path,
+    display_fn=None,
+    **optimize_kwargs,
+) -> pd.DataFrame:
+    summary_rows = []
+    summary_path = Path(summary_path)
+    for index, dataset_name in enumerate(selected_datasets, start=1):
+        print(f"[{index}/{len(selected_datasets)}] {dataset_name}")
+        try:
+            row = optimize_dataset_parameters(dataset_name, **optimize_kwargs)
+        except Exception as exc:
+            row = {
+                "dataset": dataset_name,
+                "status": "failed",
+                "error": repr(exc),
+                "traceback": traceback.format_exc(),
+            }
+            print(row["traceback"])
+        print_optimization_result(row)
+        summary_rows.append(row)
+
+        summary = pd.DataFrame(summary_rows)
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary.to_csv(summary_path, index=False)
+        if display_fn is not None:
+            display_fn(summary.tail(1).T)
+    return pd.DataFrame(summary_rows)
 
 
 def _coerce_sweep_value(value, template):

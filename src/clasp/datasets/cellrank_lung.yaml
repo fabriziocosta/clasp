@@ -1,7 +1,7 @@
 name: cellrank_lung
 input: data/cellrank-lung.h5ad
 embedded: data/cellrank-lung-clasp.h5ad
-batch_key: time
+batch_key: day
 label_key: clusters
 source: https://cellrank.readthedocs.io/en/latest/api/datasets.html
 paper_group: CellRank trajectory benchmark
