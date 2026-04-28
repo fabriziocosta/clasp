@@ -268,13 +268,7 @@ The objective:
 
 The default scalar objective is:
 
-$$
-\mathrm{score}
-=
-\mathrm{knn\_label\_agreement}
-+ 0.25 \cdot \mathrm{batch\_mixing}
-- 0.05 \cdot \mathrm{graph\_density}
-$$
+$$\mathrm{score}=\mathrm{knn\_label\_agreement}+ 0.25 \cdot \mathrm{batch\_mixing}- 0.05 \cdot \mathrm{graph\_density}$$
 
 The optimizers first run PCA latent BO. Optional GPLVM refinement can then search a compact space around the PCA best parameters. The compact search is controlled by `compact_radii`, which defines the local radius around each best numeric parameter.
 
