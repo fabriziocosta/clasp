@@ -98,12 +98,12 @@ Optional:
 ## Notebooks
 
 - `notebooks/00_download_datasets.ipynb`: download registered `.h5ad` datasets into `data/`.
-- `notebooks/00_1_optimize_all_datasets.ipynb`: run PCA latent BO plus GPLVM refinement for all paper datasets and save optimized configs.
-- `notebooks/05_integrated_pipeline.ipynb`: tune parameters, save them, embed, save the embedded AnnData file, and plot in one workflow.
-- `notebooks/01_latent_bayesopt.ipynb`: optimize preprocessing PCA and graph parameters, then save them to `data/optimized_params/`.
-- `notebooks/02_visualize_embedding.ipynb`: load optimized preprocessing and graph parameters, embed in 2D, plot, and save the embedded AnnData.
-- `notebooks/03_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
-- `notebooks/04_assignment_quantile_sweep.ipynb`: sweep graph parameters around the optimized baseline.
+- `notebooks/01_optimize_all_datasets.ipynb`: run PCA latent BO plus GPLVM refinement for all paper datasets and save optimized configs.
+- `notebooks/02_latent_bayesopt.ipynb`: optimize preprocessing PCA and graph parameters, then save them to `data/optimized_params/`.
+- `notebooks/03_visualize_embedding.ipynb`: load optimized preprocessing and graph parameters, embed in 2D, plot, and save the embedded AnnData.
+- `notebooks/04_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
+- `notebooks/05_assignment_quantile_sweep.ipynb`: sweep graph parameters around the optimized baseline.
+- `notebooks/06_integrated_pipeline.ipynb`: tune parameters, save them, embed, save the embedded AnnData file, and plot in one workflow.
 
 The notebooks default to `data/pancreas_normalized.h5ad`, a real batch-integration example with five pancreas studies/platforms in `obs["study"]` and curated cell types in `obs["cell_type"]`. The optimization notebook writes optimized graph parameters, the visualization notebook writes `data/pancreas_normalized-clasp.h5ad`, and the evaluation notebook then reads that embedded file.
 

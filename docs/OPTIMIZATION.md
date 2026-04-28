@@ -5,7 +5,7 @@ CLASP includes an optional hyperparameter optimizer for expensive graph-embeddin
 The implementation lives in:
 
 - `src/clasp/optimization/latent_bo.py`
-- `notebooks/01_latent_bayesopt.ipynb`
+- `notebooks/02_latent_bayesopt.ipynb`
 
 The optional dependencies are installed with:
 
@@ -146,7 +146,7 @@ result = latent_bayesopt(
 
 ## Objective Used In The Notebook
 
-`notebooks/01_latent_bayesopt.ipynb` defines a CLASP objective that:
+`notebooks/02_latent_bayesopt.ipynb` defines a CLASP objective that:
 
 1. Copies a preprocessed `AnnData`.
 2. Embeds it with candidate graph parameters.

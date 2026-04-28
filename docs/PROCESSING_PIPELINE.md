@@ -57,11 +57,12 @@ The rest of the pipeline should use this returned `dataset` object rather than h
 The intended notebook order is:
 
 1. `00_download_datasets.ipynb`: download configured datasets.
-2. `00_1_optimize_all_datasets.ipynb`: optimize preprocessing, estimator, and graph parameters for all paper datasets.
-3. `01_latent_bayesopt.ipynb`: optimize preprocessing, estimator, and graph parameters for one selected dataset.
-4. `02_visualize_embedding.ipynb`: load saved parameters, run CLASP, save the embedded `.h5ad`, and plot batch/label panels.
-5. `03_evaluate_embedding.ipynb`: compute integration metrics for an embedded dataset.
-6. `04_assignment_quantile_sweep.ipynb`: run small one-parameter sweeps for visual diagnostics.
+2. `01_optimize_all_datasets.ipynb`: optimize preprocessing, estimator, and graph parameters for all paper datasets.
+3. `02_latent_bayesopt.ipynb`: optimize preprocessing, estimator, and graph parameters for one selected dataset.
+4. `03_visualize_embedding.ipynb`: load saved parameters, run CLASP, save the embedded `.h5ad`, and plot batch/label panels.
+5. `04_evaluate_embedding.ipynb`: compute integration metrics for an embedded dataset.
+6. `05_assignment_quantile_sweep.ipynb`: run small one-parameter sweeps for visual diagnostics.
+7. `06_integrated_pipeline.ipynb`: run tuning, embedding, saving, and plotting in one selected-dataset workflow.
 
 The common pattern is:
 
@@ -307,7 +308,7 @@ To add a dataset:
 
 1. Create `src/clasp/datasets/<name>.yaml`.
 2. Set `input`, `embedded`, `batch_key`, and `label_key`.
-3. Add a `download` block if the dataset should be downloadable from notebook 00.
+3. Add a `download` block if the dataset should be downloadable from `00_download_datasets.ipynb`.
 4. Set preprocessing defaults that match the file state, especially `normalize`.
 5. Set graph defaults if the dataset needs nonstandard behavior.
 6. Use the new dataset by name:

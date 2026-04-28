@@ -453,6 +453,6 @@ The object-oriented entry point for this workflow is `ClaspEstimator`. Its `prep
 
 This workflow is implemented in:
 
-- `notebooks/01_latent_bayesopt.ipynb`
-- `notebooks/02_visualize_embedding.ipynb`
-- `notebooks/03_evaluate_embedding.ipynb`
+- `notebooks/02_latent_bayesopt.ipynb`
+- `notebooks/03_visualize_embedding.ipynb`
+- `notebooks/04_evaluate_embedding.ipynb`

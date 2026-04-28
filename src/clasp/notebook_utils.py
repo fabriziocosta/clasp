@@ -281,7 +281,7 @@ def load_or_default_params(
                 path,
                 message=(
                     f"Optimized parameter file at {path} lacks matching dataset metadata; "
-                    "using dataset registry defaults. Rerun notebook 00_1 to regenerate optimized parameters."
+                    "using dataset registry defaults. Rerun notebook 01 to regenerate optimized parameters."
                 ),
             )
         payload.setdefault("source", "optimized")
@@ -419,6 +419,8 @@ def run_embedding_visualization(
     figure_dir: str | Path = "figures",
     display_fn=None,
     close_figures: bool = False,
+    run_name: str | None = None,
+    plot_pca: bool = True,
 ) -> tuple[ad.AnnData, dict]:
     dataset = context["dataset"]
     estimator = context["estimator"]
@@ -428,19 +430,26 @@ def run_embedding_visualization(
     adata = embed_dataset(adata, estimator, context["graph_params"])
 
     figure_dir = Path(figure_dir)
-    clasp_path = figure_dir / f"{selected_dataset}_clasp_embedding.pdf"
-    pca_path = figure_dir / f"{selected_dataset}_pca_embedding.pdf"
+    output_prefix = selected_dataset if run_name is None else f"{selected_dataset}_{run_name}"
+    clasp_path = figure_dir / f"{output_prefix}_clasp_embedding.pdf"
     clasp_axes = estimator.plot(
         adata,
         embedding_key="X_clasp",
         filename=clasp_path,
     )
-    pca_axes = estimator.plot(
-        adata,
-        embedding_key="X_pca",
-        filename=pca_path,
-    )
-    figures = [np.asarray(clasp_axes).ravel()[0].figure, np.asarray(pca_axes).ravel()[0].figure]
+    figures = [np.asarray(clasp_axes).ravel()[0].figure]
+    figure_paths = {
+        "clasp": str(clasp_path),
+    }
+    if plot_pca:
+        pca_path = figure_dir / f"{output_prefix}_pca_embedding.pdf"
+        pca_axes = estimator.plot(
+            adata,
+            embedding_key="X_pca",
+            filename=pca_path,
+        )
+        figures.append(np.asarray(pca_axes).ravel()[0].figure)
+        figure_paths["pca"] = str(pca_path)
     if display_fn is not None:
         for fig in figures:
             display_fn(fig)
@@ -448,13 +457,13 @@ def run_embedding_visualization(
         for fig in figures:
             plt.close(fig)
 
-    context["figure_paths"] = {
-        "clasp": str(clasp_path),
-        "pca": str(pca_path),
-    }
+    context["figure_paths"] = figure_paths
     if save:
-        estimator.save(adata, context["output_path"])
-        context["embedded_path"] = str(context["output_path"])
+        output_path = context["output_path"]
+        if run_name is not None:
+            output_path = output_path.with_name(f"{output_path.stem}-{run_name}{output_path.suffix}")
+        estimator.save(adata, output_path)
+        context["embedded_path"] = str(output_path)
     return adata, context["graph_params"]
 
 

@@ -322,6 +322,100 @@ def test_run_dataset_optimization_sweep_can_generate_figures(monkeypatch, tmp_pa
     assert displayed
 
 
+def test_run_embedding_visualization_uses_run_name_for_outputs(monkeypatch, tmp_path):
+    context = {
+        "selected_dataset": "example",
+        "dataset": {},
+        "estimator": object(),
+        "preprocess_overrides": {},
+        "graph_params": {"n_neighbors": 3},
+        "output_path": tmp_path / "example-clasp.h5ad",
+    }
+
+    def fake_load_preprocessed_data(estimator, dataset, **kwargs):
+        return "adata"
+
+    def fake_embed_dataset(adata, estimator, graph_params):
+        return adata
+
+    class FakeFigure:
+        pass
+
+    class FakeAxis:
+        figure = FakeFigure()
+
+    class FakeEstimator:
+        def plot(self, adata, *, embedding_key, filename):
+            return [FakeAxis()]
+
+        def save(self, adata, path):
+            path.write_text("saved")
+
+    context["estimator"] = FakeEstimator()
+    monkeypatch.setattr(notebook_utils, "load_preprocessed_data", fake_load_preprocessed_data)
+    monkeypatch.setattr(notebook_utils, "embed_dataset", fake_embed_dataset)
+
+    _, graph_params = notebook_utils.run_embedding_visualization(
+        context,
+        figure_dir=tmp_path,
+        run_name="manual",
+    )
+
+    assert graph_params == {"n_neighbors": 3}
+    assert context["figure_paths"]["clasp"] == str(tmp_path / "example_manual_clasp_embedding.pdf")
+    assert context["figure_paths"]["pca"] == str(tmp_path / "example_manual_pca_embedding.pdf")
+    assert context["embedded_path"] == str(tmp_path / "example-clasp-manual.h5ad")
+    assert (tmp_path / "example-clasp-manual.h5ad").exists()
+
+
+def test_run_embedding_visualization_can_skip_pca_plot(monkeypatch, tmp_path):
+    context = {
+        "selected_dataset": "example",
+        "dataset": {},
+        "estimator": object(),
+        "preprocess_overrides": {},
+        "graph_params": {"n_neighbors": 3},
+        "output_path": tmp_path / "example-clasp.h5ad",
+    }
+    plotted = []
+
+    def fake_load_preprocessed_data(estimator, dataset, **kwargs):
+        return "adata"
+
+    def fake_embed_dataset(adata, estimator, graph_params):
+        return adata
+
+    class FakeFigure:
+        pass
+
+    class FakeAxis:
+        figure = FakeFigure()
+
+    class FakeEstimator:
+        def plot(self, adata, *, embedding_key, filename):
+            plotted.append(embedding_key)
+            return [FakeAxis()]
+
+        def save(self, adata, path):
+            path.write_text("saved")
+
+    context["estimator"] = FakeEstimator()
+    monkeypatch.setattr(notebook_utils, "load_preprocessed_data", fake_load_preprocessed_data)
+    monkeypatch.setattr(notebook_utils, "embed_dataset", fake_embed_dataset)
+
+    notebook_utils.run_embedding_visualization(
+        context,
+        figure_dir=tmp_path,
+        run_name="manual",
+        plot_pca=False,
+    )
+
+    assert plotted == ["X_clasp"]
+    assert context["figure_paths"] == {
+        "clasp": str(tmp_path / "example_manual_clasp_embedding.pdf"),
+    }
+
+
 def test_run_dataset_optimization_sweep_skips_existing_figures_by_default(monkeypatch, tmp_path):
     def fake_optimize_dataset_parameters(dataset_name, **kwargs):
         return {"dataset": dataset_name, "status": "skipped_existing"}
