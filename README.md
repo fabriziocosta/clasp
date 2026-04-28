@@ -85,7 +85,21 @@ Pass `filename="figures/my_embedding"` to also save the displayed plot as a high
 
 ## Command Line
 
-The first Galaxy-oriented command is `clasp embed`, which reads an `.h5ad`, writes an embedded `.h5ad`, and can optionally save a plot.
+The first Galaxy-oriented command is `clasp embed`. It reads an `.h5ad`, preprocesses it, builds the CLASP graph, writes an embedded `.h5ad`, and can optionally save a plot.
+
+Show available commands:
+
+```bash
+clasp --help
+```
+
+Show all options for embedding:
+
+```bash
+clasp embed --help
+```
+
+Basic embedding:
 
 ```bash
 clasp embed input.h5ad clasp_embedded.h5ad \
@@ -96,7 +110,85 @@ clasp embed input.h5ad clasp_embedded.h5ad \
   --figure figures/clasp_embedding.pdf
 ```
 
-Use `--preset trajectory` for smoother CellRank-style temporal datasets. Any preset value can be overridden with explicit flags such as `--n-neighbors`, `--n-inter-edges`, `--assignment-quantile`, `--n-components`, or preprocessing flags like `--n-top-genes`.
+Use `--preset balanced` for the benchmark-derived general default. Use `--preset trajectory` for smoother CellRank-style temporal datasets.
+
+Inputs and outputs:
+
+- `input`: input AnnData `.h5ad`.
+- `output`: output AnnData `.h5ad` with the CLASP embedding stored in `obsm["X_clasp"]` by default.
+- `--figure`: optional plot path, for example `.pdf` or `.png`.
+
+Core options:
+
+- `--batch-key`: `adata.obs` column for batch, sample, donor, dataset, or time point.
+- `--label-key`: `adata.obs` column for biological labels used in plots.
+- `--rep-key`: input representation in `adata.obsm`; default is `X_pca`.
+- `--embedding-key`: output embedding key; default is `X_clasp`.
+- `--random-state`: seed for reproducible preprocessing and embedding.
+- `--embedding-method`: graph embedding backend, such as `auto`, `umap`, or `spectral`.
+- `--embedding-components`: number of output embedding dimensions.
+
+Preprocessing overrides:
+
+- `--n-top-genes`: number of highly variable genes to keep; use `none` to disable HVG selection.
+- `--max-cells`: optional stratified cell cap for faster runs.
+- `--min-cell-genes`: optional minimum detected genes per cell.
+- `--min-gene-counts`: minimum total counts per gene.
+- `--normalize`: `auto`, `true`, or `false`.
+- `--target-sum`: library-size target for normalization.
+- `--log1p`: `true` or `false`.
+- `--hvg-flavor`: HVG method, for example `variance` or `cell_ranger`.
+- `--create-artificial-batch`: `true` or `false`; useful only for smoke tests or single-batch files.
+- `--artificial-batch-count`: number of deterministic `split_*` artificial batches.
+
+Estimator and graph overrides:
+
+- `--n-components`: PCA components used before graph construction.
+- `--n-neighbors`: total neighborhood scale.
+- `--intra-fraction`: fraction of neighbors assigned to within-batch kNN edges.
+- `--n-inter-edges`: number of assignment layers between batch pairs.
+- `--metric`: distance metric.
+- `--assignment-quantile`: retained assignment distance quantile; use `none` to disable filtering.
+- `--hubness-correction`: `csls` or `none`.
+- `--hubness-k`: CSLS local neighborhood size.
+- `--rank-correction`: `true` or `false`.
+- `--edge-weighting`: `distance` or `binary`.
+- `--inter-edge-mode`: `assignment` or `propagate_neighbors`.
+- `--mutual-neighbors`: `true` or `false`.
+- `--neighbor-mode`: `distance` or `rank`.
+- `--symmetrize`: `true` or `false`.
+
+Examples:
+
+```bash
+# Fast smoke test on a small subset.
+clasp embed input.h5ad smoke.h5ad \
+  --batch-key batch \
+  --label-key label \
+  --max-cells 1000 \
+  --embedding-method spectral
+```
+
+```bash
+# Temporal trajectory-oriented preset.
+clasp embed input.h5ad trajectory_clasp.h5ad \
+  --batch-key day \
+  --label-key cell_type \
+  --preset trajectory \
+  --figure figures/trajectory_clasp.pdf
+```
+
+```bash
+# Manual graph override while keeping the balanced preset for unspecified values.
+clasp embed input.h5ad custom_clasp.h5ad \
+  --batch-key batch \
+  --label-key label \
+  --preset balanced \
+  --n-neighbors 30 \
+  --n-inter-edges 4 \
+  --assignment-quantile 0.5 \
+  --mutual-neighbors true
+```
 
 ## AnnData Schema
 
