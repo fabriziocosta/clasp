@@ -8,6 +8,7 @@ import pytest
 from scipy import sparse
 
 from clasp import (
+    available_presets,
     ClaspEstimator,
     EstimatorTuneParams,
     GraphTuneParams,
@@ -205,6 +206,47 @@ def test_estimator_graph_and_embedding_methods(toy_adata):
     assert sparse.isspmatrix_csr(graph)
     assert graph.shape == (adata.n_obs, adata.n_obs)
     assert coords.shape == (adata.n_obs, 2)
+
+
+def test_estimator_accepts_balanced_preset_by_name():
+    estimator = ClaspEstimator(preset="balanced")
+
+    assert "balanced" in available_presets()
+    assert estimator.n_components == 80
+    assert estimator.n_neighbors == 24
+    assert estimator.n_inter_edges == 3
+    assert estimator.assignment_quantile == 0.32
+    assert estimator.hubness_k == 12
+    assert estimator.edge_weighting == "distance"
+    assert estimator.inter_edge_mode == "assignment"
+    assert estimator.mutual_neighbors is True
+    assert estimator.preprocess_defaults["n_top_genes"] == 1300
+
+
+def test_estimator_accepts_trajectory_preset_by_name():
+    estimator = ClaspEstimator(preset="trajectory")
+
+    assert estimator.n_components == 90
+    assert estimator.n_neighbors == 28
+    assert estimator.intra_fraction == 0.58
+    assert estimator.n_inter_edges == 4
+    assert estimator.assignment_quantile == 0.30
+    assert estimator.hubness_k == 13
+    assert estimator.inter_edge_mode == "propagate_neighbors"
+    assert estimator.mutual_neighbors is True
+
+
+def test_estimator_preset_preserves_explicit_constructor_overrides():
+    estimator = ClaspEstimator(preset="balanced", n_neighbors=10, inter_edge_mode="propagate_neighbors")
+
+    assert estimator.n_components == 80
+    assert estimator.n_neighbors == 10
+    assert estimator.inter_edge_mode == "propagate_neighbors"
+
+
+def test_estimator_rejects_unknown_preset():
+    with pytest.raises(ValueError, match="Unknown CLASP preset"):
+        ClaspEstimator(preset="not-a-preset")
 
 
 def test_estimator_graph_to_embeddings_accepts_call_overrides(toy_adata):

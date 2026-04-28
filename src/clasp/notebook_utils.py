@@ -20,30 +20,15 @@ import yaml
 
 from clasp.estimator import ClaspEstimator
 from clasp.metrics import score_embedding
+from clasp.presets import get_graph_preset, get_preprocess_preset
 
 
 DEFAULT_PREPROCESS_PARAMS = {
-    "normalize": False,
-    "hvg_flavor": "variance",
-    "min_gene_counts": 0,
-    "create_artificial_batch": False,
+    **get_preprocess_preset("balanced"),
 }
 
 
-DEFAULT_GRAPH_PARAMS = {
-    "n_neighbors": 20,
-    "intra_fraction": 0.5,
-    "n_inter_edges": 5,
-    "assignment_quantile": 0.35,
-    "hubness_correction": "csls",
-    "hubness_k": 10,
-    "rank_correction": True,
-    "edge_weighting": "distance",
-    "inter_edge_mode": "propagate_neighbors",
-    "mutual_neighbors": False,
-    "neighbor_mode": "distance",
-    "symmetrize": True,
-}
+DEFAULT_GRAPH_PARAMS = get_graph_preset("balanced")
 
 
 PAPER_DATASET_DOWNLOADS = [
@@ -360,10 +345,10 @@ def make_estimator(dataset: dict, *, n_components: int = 100, random_state: int 
 
 def preprocess_params(dataset: dict, **overrides) -> dict:
     params = {
-        "n_top_genes": 2000,
+        "n_top_genes": DEFAULT_PREPROCESS_PARAMS["n_top_genes"],
         "max_cells": None,
         "min_cell_genes": None,
-        "min_gene_counts": 3,
+        "min_gene_counts": DEFAULT_PREPROCESS_PARAMS["min_gene_counts"],
         **dataset.get("preprocess", {}),
     }
     params.update({key: value for key, value in overrides.items() if value is not None})
@@ -682,7 +667,7 @@ def save_best_optimization_result(
 def default_optimization_config(
     dataset: dict,
     *,
-    base_n_top_genes: int = 1500,
+    base_n_top_genes: int = DEFAULT_PREPROCESS_PARAMS["n_top_genes"],
     base_estimator_params: dict | None = None,
     base_graph_params: dict | None = None,
     preprocess_search_space: dict | None = None,
@@ -692,19 +677,8 @@ def default_optimization_config(
     base_preprocess_params = preprocess_params(dataset, n_top_genes=base_n_top_genes)
     base_estimator_params = {"n_components": 60} if base_estimator_params is None else base_estimator_params.copy()
     default_graph_params = {
+        **DEFAULT_GRAPH_PARAMS,
         **dataset.get("graph", {}),
-        "n_neighbors": 15,
-        "intra_fraction": 0.5,
-        "n_inter_edges": 2,
-        "metric": "euclidean",
-        "assignment_quantile": 0.8,
-        "hubness_correction": "csls",
-        "hubness_k": 10,
-        "rank_correction": True,
-        "edge_weighting": "binary",
-        "mutual_neighbors": False,
-        "neighbor_mode": "distance",
-        "symmetrize": True,
     }
     if base_graph_params is not None:
         default_graph_params.update(base_graph_params)
@@ -782,7 +756,7 @@ def optimize_dataset_parameters(
     pca_bo_settings: dict | None = None,
     gplvm_bo_settings: dict | None = None,
     compact_radii: dict | None = None,
-    base_n_top_genes: int = 1500,
+    base_n_top_genes: int = DEFAULT_PREPROCESS_PARAMS["n_top_genes"],
     base_estimator_params: dict | None = None,
     base_graph_params: dict | None = None,
     preprocess_search_space: dict | None = None,
@@ -972,6 +946,7 @@ def run_dataset_optimization_sweep(
     summary_path: str | Path,
     display_fn=None,
     generate_figures: bool = False,
+    generate_figures_for_skipped: bool = False,
     display_figures: bool = True,
     save_visualization: bool = True,
     visualization_max_cells: int | None = 6000,
@@ -994,7 +969,12 @@ def run_dataset_optimization_sweep(
             print(row["traceback"])
         print_optimization_result(row)
 
-        if generate_figures and row.get("status") not in {"failed", "missing_input"}:
+        should_generate_figures = generate_figures and row.get("status") not in {"failed", "missing_input"}
+        if row.get("status") == "skipped_existing" and not generate_figures_for_skipped:
+            should_generate_figures = False
+            row["visualization_status"] = "skipped_existing"
+
+        if should_generate_figures:
             try:
                 context = prepare_visualization_run(
                     dataset_name,

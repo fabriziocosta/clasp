@@ -15,14 +15,16 @@ preprocess:
   min_gene_counts: 0
   create_artificial_batch: true
 graph:
-  n_neighbors: 20
+  n_neighbors: 24
   intra_fraction: 0.5
-  n_inter_edges: 5
-  assignment_quantile: 0.35
+  n_inter_edges: 3
+  metric: euclidean
+  assignment_quantile: 0.32
   hubness_correction: csls
-  hubness_k: 10
+  hubness_k: 12
   rank_correction: true
   edge_weighting: distance
-  mutual_neighbors: false
+  inter_edge_mode: assignment
+  mutual_neighbors: true
   neighbor_mode: distance
   symmetrize: true

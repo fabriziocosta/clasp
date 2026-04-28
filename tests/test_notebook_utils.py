@@ -241,6 +241,13 @@ def test_cellrank_lung_uses_day_batches():
     assert dataset["label_key"] == "clusters"
 
 
+def test_cellrank_reprogramming_morris_uses_available_obs_columns():
+    dataset = dataset_config("cellrank_reprogramming_morris")
+
+    assert dataset["batch_key"] == "reprogramming_day"
+    assert dataset["label_key"] == "cluster"
+
+
 def test_cellrank_pancreas_uses_artificial_batches():
     dataset = dataset_config("cellrank_pancreas")
 
@@ -302,6 +309,7 @@ def test_run_dataset_optimization_sweep_can_generate_figures(monkeypatch, tmp_pa
         ["example"],
         summary_path=tmp_path / "summary.csv",
         generate_figures=True,
+        generate_figures_for_skipped=True,
         display_fn=displayed.append,
         project_root=tmp_path,
     )
@@ -312,3 +320,25 @@ def test_run_dataset_optimization_sweep_can_generate_figures(monkeypatch, tmp_pa
     assert row["pca_figure_path"] == "figures/example_pca_embedding.pdf"
     assert row["embedded_path"] == "data/example-clasp.h5ad"
     assert displayed
+
+
+def test_run_dataset_optimization_sweep_skips_existing_figures_by_default(monkeypatch, tmp_path):
+    def fake_optimize_dataset_parameters(dataset_name, **kwargs):
+        return {"dataset": dataset_name, "status": "skipped_existing"}
+
+    def fail_run_embedding_visualization(*args, **kwargs):
+        raise AssertionError("skipped datasets should not regenerate visualizations by default")
+
+    monkeypatch.setattr(notebook_utils, "optimize_dataset_parameters", fake_optimize_dataset_parameters)
+    monkeypatch.setattr(notebook_utils, "run_embedding_visualization", fail_run_embedding_visualization)
+
+    summary = run_dataset_optimization_sweep(
+        ["example"],
+        summary_path=tmp_path / "summary.csv",
+        generate_figures=True,
+        project_root=tmp_path,
+    )
+
+    row = summary.iloc[0]
+    assert row["status"] == "skipped_existing"
+    assert row["visualization_status"] == "skipped_existing"

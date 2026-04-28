@@ -28,27 +28,28 @@ from clasp import (
     score_embedding,
 )
 
-# batch_key is the technical batch/sample/time column; label_key is the biological cell-type column.
-estimator = ClaspEstimator(batch_key="batch", label_key="label")
+# Use preset="balanced" for optimized benchmark-derived defaults.
+# Use preset="trajectory" for smoother CellRank-style temporal datasets.
+estimator = ClaspEstimator(preset="balanced", batch_key="batch", label_key="label")
 adata = estimator.to_data("input.h5ad")
 adata = estimator.preprocess(
     adata,
     # Number of highly variable genes to keep before PCA.
-    n_top_genes=2000,
+    n_top_genes=estimator.preprocess_defaults["n_top_genes"],
     # Optional cell cap for faster experiments; None keeps all cells.
     max_cells=None,
     # Optional minimum detected genes per cell; None disables cell filtering.
     min_cell_genes=None,
     # Remove genes observed fewer than this many total counts.
-    min_gene_counts=3,
+    min_gene_counts=estimator.preprocess_defaults["min_gene_counts"],
     # "auto" normalizes only when data does not look already log-normalized.
     normalize="auto",
     # Library-size target used by scanpy.pp.normalize_total.
     target_sum=1e4,
     # Apply scanpy.pp.log1p after normalization.
     log1p=True,
-    # Scanpy HVG flavor used for gene selection.
-    hvg_flavor="cell_ranger",
+    # HVG flavor used for gene selection.
+    hvg_flavor=estimator.preprocess_defaults["hvg_flavor"],
     # Optional batch-aware HVG selection key.
     hvg_batch_key=None,
     # Create deterministic split_* batches only for single-batch smoke tests.
@@ -69,32 +70,7 @@ adata = estimator.preprocess(
     copy=True,
 )
 
-graph = estimator.data_to_graph(
-    adata,
-    # Total neighborhood scale used to build the integrated graph.
-    n_neighbors=15,
-    # Fraction of neighbors assigned to within-batch kNN edges.
-    intra_fraction=0.5,
-    # Number of repeated Hungarian assignment layers between batch pairs.
-    n_inter_edges=1,
-    # Keep only cross-batch assignments up to this distance quantile.
-    assignment_quantile=0.95,
-    # Apply CSLS hubness correction before kNN and Hungarian assignment.
-    hubness_correction="csls",
-    # Local neighborhood size used by CSLS.
-    hubness_k=10,
-    # Use binary for paper-compatible graph connectivity, or distance for weighted edges.
-    edge_weighting="binary",
-    # Default: use assigned cross-batch partners to inherit their local neighbors.
-    # Use "assignment" to link retained assigned pairs directly instead.
-    inter_edge_mode="propagate_neighbors",
-    # Retain within-batch kNN edges only when the neighbor relation is reciprocal.
-    mutual_neighbors=True,
-    # Use reciprocal rank scores, rather than raw distances, for within-batch kNN selection.
-    neighbor_mode="rank",
-    # Symmetrize the final graph.
-    symmetrize=True,
-)
+graph = estimator.data_to_graph(adata)
 adata.obsm["X_clasp"] = estimator.graph_to_embeddings(graph)
 scores = score_embedding(adata, embedding_key="X_clasp", batch_key="batch", label_key="label", graph=graph)
 

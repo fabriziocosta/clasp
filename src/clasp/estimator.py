@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 import json
 from pathlib import Path
 import warnings
@@ -14,7 +14,11 @@ from clasp.embedding import embed_graph
 from clasp.graph import GraphParams, build_clasp_graph
 from clasp.io import read_h5ad, save_h5ad, validate_adata
 from clasp.plotting import plot_embedding_pair
+from clasp.presets import get_preset
 from clasp.preprocessing import ensure_pca
+
+
+_UNSET = object()
 
 
 def _optional_scanpy():
@@ -221,10 +225,11 @@ def _compact_search_space(search_space: dict, best_params: dict, radii: dict, *,
     return compact
 
 
-@dataclass
+@dataclass(init=False)
 class ClaspEstimator:
     """Object-oriented facade for the CLASP workflow."""
 
+    preset: str | None = None
     rep_key: str = "X_pca"
     batch_key: str = "batch"
     label_key: str = "label"
@@ -245,6 +250,89 @@ class ClaspEstimator:
     random_state: int = 0
     embedding_method: str = "auto"
     embedding_components: int = 2
+
+    def __init__(
+        self,
+        rep_key: str = "X_pca",
+        batch_key: str = "batch",
+        label_key: str = "label",
+        n_neighbors=_UNSET,
+        intra_fraction=_UNSET,
+        n_inter_edges=_UNSET,
+        metric=_UNSET,
+        assignment_quantile=_UNSET,
+        hubness_correction=_UNSET,
+        hubness_k=_UNSET,
+        rank_correction=_UNSET,
+        edge_weighting=_UNSET,
+        inter_edge_mode=_UNSET,
+        mutual_neighbors=_UNSET,
+        neighbor_mode=_UNSET,
+        symmetrize=_UNSET,
+        n_components=_UNSET,
+        random_state: int = 0,
+        embedding_method: str = "auto",
+        embedding_components: int = 2,
+        preset: str | None = None,
+    ) -> None:
+        defaults = {item.name: item.default for item in fields(type(self))}
+        preset_values = {}
+        if preset is not None:
+            selected = get_preset(preset)
+            preset_values = {**selected["estimator"], **selected["graph"]}
+
+        def value_for(name: str, value):
+            if value is _UNSET:
+                return preset_values.get(name, defaults[name])
+            return value
+
+        self.preset = preset
+        self.rep_key = rep_key
+        self.batch_key = batch_key
+        self.label_key = label_key
+        self.n_neighbors = value_for("n_neighbors", n_neighbors)
+        self.intra_fraction = value_for("intra_fraction", intra_fraction)
+        self.n_inter_edges = value_for("n_inter_edges", n_inter_edges)
+        self.metric = value_for("metric", metric)
+        self.assignment_quantile = value_for("assignment_quantile", assignment_quantile)
+        self.hubness_correction = value_for("hubness_correction", hubness_correction)
+        self.hubness_k = value_for("hubness_k", hubness_k)
+        self.rank_correction = value_for("rank_correction", rank_correction)
+        self.edge_weighting = value_for("edge_weighting", edge_weighting)
+        self.inter_edge_mode = value_for("inter_edge_mode", inter_edge_mode)
+        self.mutual_neighbors = value_for("mutual_neighbors", mutual_neighbors)
+        self.neighbor_mode = value_for("neighbor_mode", neighbor_mode)
+        self.symmetrize = value_for("symmetrize", symmetrize)
+        self.n_components = value_for("n_components", n_components)
+        self.random_state = random_state
+        self.embedding_method = embedding_method
+        self.embedding_components = embedding_components
+
+    @property
+    def preprocess_defaults(self) -> dict:
+        """Return preprocessing defaults for this estimator's named preset."""
+        if self.preset is None:
+            return {}
+        return get_preset(self.preset)["preprocess"]
+
+    @property
+    def graph_defaults(self) -> dict:
+        """Return graph-construction defaults currently set on the estimator."""
+        return {
+            "n_neighbors": self.n_neighbors,
+            "intra_fraction": self.intra_fraction,
+            "n_inter_edges": self.n_inter_edges,
+            "metric": self.metric,
+            "assignment_quantile": self.assignment_quantile,
+            "hubness_correction": self.hubness_correction,
+            "hubness_k": self.hubness_k,
+            "rank_correction": self.rank_correction,
+            "edge_weighting": self.edge_weighting,
+            "inter_edge_mode": self.inter_edge_mode,
+            "mutual_neighbors": self.mutual_neighbors,
+            "neighbor_mode": self.neighbor_mode,
+            "symmetrize": self.symmetrize,
+        }
 
     def to_data(self, path: str | Path) -> ad.AnnData:
         """Read an `.h5ad` file and return an AnnData object."""
