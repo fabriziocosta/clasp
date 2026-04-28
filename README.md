@@ -116,12 +116,12 @@ Inputs and outputs:
 
 - `input`: input AnnData `.h5ad`.
 - `output`: output AnnData `.h5ad` with the CLASP embedding stored in `obsm["X_clasp"]` by default.
-- `--figure`: optional plot path, for example `.pdf` or `.png`.
+- `--figure`: optional plot path, for example `.pdf` or `.png`. If `--label-key` is absent from `adata.obs`, the label panel is drawn with all cells in one pale-blue unlabeled category.
 
 Core options:
 
 - `--batch-key`: `adata.obs` column for batch, sample, donor, dataset, or time point.
-- `--label-key`: `adata.obs` column for biological labels used in plots.
+- `--label-key`: optional `adata.obs` column for biological labels used in plots. If missing, embedding still runs and plots use a pale-blue unlabeled panel.
 - `--rep-key`: input representation in `adata.obsm`; default is `X_pca`.
 - `--embedding-key`: output embedding key; default is `X_clasp`.
 - `--random-state`: seed for reproducible preprocessing and embedding.

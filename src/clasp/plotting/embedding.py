@@ -9,16 +9,21 @@ import pandas as pd
 import seaborn as sns
 
 
+MISSING_LABEL_COLOR = "#b7d7ee"
+MISSING_LABEL_CATEGORY = "unlabeled"
+
+
 def _embedding_frame(
     adata: ad.AnnData,
     *,
     embedding_key: str,
     color_key: str,
     order: np.ndarray | None = None,
+    missing_category: str | None = None,
 ) -> pd.DataFrame:
     if embedding_key not in adata.obsm:
         raise KeyError(f"Missing embedding in obsm: {embedding_key!r}")
-    if color_key not in adata.obs:
+    if color_key not in adata.obs and missing_category is None:
         raise KeyError(f"Missing obs column: {color_key!r}")
 
     X = adata.obsm[embedding_key]
@@ -28,11 +33,16 @@ def _embedding_frame(
     if order is None:
         order = np.arange(adata.n_obs)
 
+    if color_key in adata.obs:
+        color_values = adata.obs[color_key].astype(str).to_numpy()[order]
+    else:
+        color_values = np.full(len(order), missing_category, dtype=object)
+
     return pd.DataFrame(
         {
             "x": X[order, 0],
             "y": X[order, 1],
-            color_key: adata.obs[color_key].astype(str).to_numpy()[order],
+            color_key: color_values,
         }
     )
 
@@ -85,8 +95,15 @@ def _plot_embedding_on_axis(
     palette=None,
     order: np.ndarray | None = None,
     legend_markerscale: float = 2.5,
+    missing_category: str | None = None,
 ):
-    df = _embedding_frame(adata, embedding_key=embedding_key, color_key=color_key, order=order)
+    df = _embedding_frame(
+        adata,
+        embedding_key=embedding_key,
+        color_key=color_key,
+        order=order,
+        missing_category=missing_category,
+    )
     sns.scatterplot(
         data=df,
         x="x",
@@ -170,6 +187,7 @@ def plot_embedding_pair(
     alpha: float = 0.85,
     batch_palette: str | list | dict | None = "viridis",
     label_palette: str | list | dict | None = "tab20",
+    missing_label_color: str = MISSING_LABEL_COLOR,
     shuffle: bool = True,
     random_state: int | None = 0,
     legend_markerscale: float = 2.5,
@@ -178,8 +196,10 @@ def plot_embedding_pair(
 
     The default palettes mirror the paper-style qualitative figures: viridis
     for ordered batch/time slices and a high-contrast categorical palette for
-    cell-type labels. When `filename` is provided, the figure is also saved.
-    Paths without a suffix are saved as high-resolution PNG files.
+    cell-type labels. If `label_key` is absent, the label panel is still drawn
+    with all cells in one pale-blue unlabeled category. When `filename` is
+    provided, the figure is also saved. Paths without a suffix are saved as
+    high-resolution PNG files.
     """
     if axes is None:
         _, axes = plt.subplots(1, 2, figsize=figsize, constrained_layout=True)
@@ -201,6 +221,7 @@ def plot_embedding_pair(
         order=order,
         legend_markerscale=legend_markerscale,
     )
+    has_label = label_key in adata.obs
     _plot_embedding_on_axis(
         adata,
         embedding_key=embedding_key,
@@ -210,9 +231,10 @@ def plot_embedding_pair(
         s=s,
         alpha=alpha,
         legend=True,
-        palette=label_palette,
+        palette=label_palette if has_label else {MISSING_LABEL_CATEGORY: missing_label_color},
         order=order,
         legend_markerscale=legend_markerscale,
+        missing_category=None if has_label else MISSING_LABEL_CATEGORY,
     )
     _save_figure(axes[0].figure, filename, dpi=save_dpi, savefig_kwargs=savefig_kwargs)
     return axes

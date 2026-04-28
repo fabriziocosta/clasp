@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import matplotlib
 import numpy as np
-import pytest
-
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
@@ -103,8 +101,14 @@ def test_plot_embedding_pair_defaults_missing_suffix_to_png(toy_adata, tmp_path)
     plt.close(axes[0].figure)
 
 
-def test_plot_embedding_pair_rejects_missing_label(toy_adata):
+def test_plot_embedding_pair_uses_pale_blue_unlabeled_panel_when_label_missing(toy_adata):
     toy_adata.obsm["X_clasp"] = toy_adata.X[:, :2]
 
-    with pytest.raises(KeyError, match="missing"):
-        plot_embedding_pair(toy_adata, embedding_key="X_clasp", batch_key="batch", label_key="missing")
+    axes = plot_embedding_pair(toy_adata, embedding_key="X_clasp", batch_key="batch", label_key="missing")
+
+    assert axes[1].get_title() == "X_clasp by missing"
+    assert axes[1].get_legend().get_title().get_text() == "missing"
+    assert axes[1].get_legend().texts[0].get_text() == "unlabeled"
+    label_color = axes[1].collections[0].get_facecolors()[0]
+    np.testing.assert_allclose(label_color[:3], np.array([0xB7, 0xD7, 0xEE]) / 255, atol=0.02)
+    plt.close(axes[0].figure)

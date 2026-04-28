@@ -97,3 +97,47 @@ def test_cli_embed_accepts_custom_embedding_key_and_figure(tmp_path, toy_adata):
     result = read_h5ad(output_path)
     assert "X_test_clasp" in result.obsm
     assert figure_path.exists()
+
+
+def test_cli_embed_figure_works_without_label_column(tmp_path, toy_adata):
+    input_path = tmp_path / "input.h5ad"
+    output_path = tmp_path / "embedded.h5ad"
+    figure_path = tmp_path / "embedding.pdf"
+    label_free = toy_adata.copy()
+    del label_free.obs["label"]
+    label_free.write_h5ad(input_path)
+
+    main(
+        [
+            "embed",
+            str(input_path),
+            str(output_path),
+            "--batch-key",
+            "batch",
+            "--label-key",
+            "label",
+            "--figure",
+            str(figure_path),
+            "--n-top-genes",
+            "none",
+            "--min-gene-counts",
+            "0",
+            "--normalize",
+            "false",
+            "--n-components",
+            "4",
+            "--n-neighbors",
+            "4",
+            "--n-inter-edges",
+            "1",
+            "--assignment-quantile",
+            "1.0",
+            "--embedding-method",
+            "spectral",
+        ]
+    )
+
+    result = read_h5ad(output_path)
+    assert "X_clasp" in result.obsm
+    assert "label" not in result.obs
+    assert figure_path.exists()
