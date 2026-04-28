@@ -296,6 +296,21 @@ estimator.save(adata, dataset["output_path"])
 
 This file can then be used for plotting, evaluation, or downstream analysis without rebuilding the graph.
 
+## Command-Line Embedding
+
+For workflow systems such as Galaxy, the notebook embedding path is also available as a file-oriented CLI:
+
+```bash
+clasp embed input.h5ad clasp_embedded.h5ad \
+  --batch-key batch \
+  --label-key label \
+  --preset balanced \
+  --max-cells 6000 \
+  --figure figures/clasp_embedding.pdf
+```
+
+The command reads one `.h5ad`, preprocesses it, builds the CLASP graph, stores the embedding in `obsm["X_clasp"]`, and writes the output `.h5ad`. The default preset is `balanced`; `trajectory` is available for smoother temporal datasets. CLI flags override preset defaults and are intended to map directly to future Galaxy tool parameters.
+
 ## Adding A New Dataset
 
 To add a dataset:

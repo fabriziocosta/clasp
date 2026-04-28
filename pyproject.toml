@@ -26,6 +26,9 @@ umap = ["umap-learn>=0.5"]
 bo = ["torch>=2.2", "botorch>=0.11", "gpytorch>=1.11"]
 dev = ["pytest>=7", "nbformat>=5"]
 
+[project.scripts]
+clasp = "clasp.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

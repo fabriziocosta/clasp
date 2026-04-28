@@ -83,6 +83,21 @@ Pass `filename="figures/my_embedding"` to also save the displayed plot as a high
 
 `ClaspEstimator.preprocess` follows the standard single-cell preprocessing pattern used by the original project: optionally filter cells and genes, normalize each cell to `target_sum`, optionally apply `log1p`, select highly variable genes with `scanpy.pp.highly_variable_genes`, and compute PCA.
 
+## Command Line
+
+The first Galaxy-oriented command is `clasp embed`, which reads an `.h5ad`, writes an embedded `.h5ad`, and can optionally save a plot.
+
+```bash
+clasp embed input.h5ad clasp_embedded.h5ad \
+  --batch-key batch \
+  --label-key label \
+  --preset balanced \
+  --max-cells 6000 \
+  --figure figures/clasp_embedding.pdf
+```
+
+Use `--preset trajectory` for smoother CellRank-style temporal datasets. Any preset value can be overridden with explicit flags such as `--n-neighbors`, `--n-inter-edges`, `--assignment-quantile`, `--n-components`, or preprocessing flags like `--n-top-genes`.
+
 ## AnnData Schema
 
 Required:
