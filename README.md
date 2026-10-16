@@ -211,6 +211,7 @@ Optional:
 - `notebooks/04_evaluate_embedding.ipynb`: compute embedding quality metrics and export a CSV report.
 - `notebooks/05_assignment_quantile_sweep.ipynb`: sweep graph parameters around the optimized baseline.
 - `notebooks/06_integrated_pipeline.ipynb`: tune parameters, save them, embed, save the embedded AnnData file, and plot in one workflow.
+- `notebooks/07_imste_single_cell.ipynb`: read an existing single-cell `.h5ad` in place, convert a stored representation to NumPy, and try the separate IMSTE embedder without writing a dataset copy.
 
 The notebooks default to `data/pancreas_normalized.h5ad`, a real batch-integration example with five pancreas studies/platforms in `obs["study"]` and curated cell types in `obs["cell_type"]`. The optimization notebook writes optimized graph parameters, the visualization notebook writes `data/pancreas_normalized-clasp.h5ad`, and the evaluation notebook then reads that embedded file.
 
