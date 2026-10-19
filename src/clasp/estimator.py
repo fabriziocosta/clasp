@@ -9,8 +9,10 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 from scipy import sparse
+from sklearn.base import clone
+from imste import IteratedMinimumSpanningTreeEmbedder
 
-from clasp.embedding import embed_graph
+from clasp.embedding import ClaspGraphEmbedder
 from clasp.graph import GraphParams, build_clasp_graph
 from clasp.io import read_h5ad, save_h5ad, validate_adata
 from clasp.plotting import plot_embedding_pair
@@ -248,8 +250,10 @@ class ClaspEstimator:
     symmetrize: bool = True
     n_components: int = 40
     random_state: int = 0
-    embedding_method: str = "auto"
+    embedding_method: str | None = None
     embedding_components: int = 2
+    embedder: object | None = None
+    _embedder_explicit: bool = False
 
     def __init__(
         self,
@@ -271,8 +275,9 @@ class ClaspEstimator:
         symmetrize=_UNSET,
         n_components=_UNSET,
         random_state: int = 0,
-        embedding_method: str = "auto",
+        embedding_method: str | None = None,
         embedding_components: int = 2,
+        embedder: object | None = None,
         preset: str | None = None,
     ) -> None:
         defaults = {item.name: item.default for item in fields(type(self))}
@@ -305,8 +310,31 @@ class ClaspEstimator:
         self.symmetrize = value_for("symmetrize", symmetrize)
         self.n_components = value_for("n_components", n_components)
         self.random_state = random_state
-        self.embedding_method = embedding_method
         self.embedding_components = embedding_components
+        if embedder is not None and embedding_method is not None:
+            raise ValueError("Pass either embedder= or embedding_method=, not both.")
+        self.embedding_method = embedding_method
+        self._embedder_explicit = embedder is not None
+        if embedder is not None:
+            if not callable(getattr(embedder, "fit_graph", None)):
+                raise TypeError("embedder must provide a fit_graph(graph) method.")
+            self.embedder = embedder
+        elif embedding_method is not None:
+            warnings.warn(
+                "embedding_method is deprecated; pass ClaspGraphEmbedder(...) via embedder= instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self.embedder = ClaspGraphEmbedder(
+                method=embedding_method,
+                n_components=embedding_components,
+                random_state=random_state,
+            )
+        else:
+            self.embedder = IteratedMinimumSpanningTreeEmbedder(
+                n_components=embedding_components,
+                random_state=random_state,
+            )
 
     @property
     def preprocess_defaults(self) -> dict:
@@ -509,7 +537,7 @@ class ClaspEstimator:
         neighbor_mode: str | None = None,
         symmetrize: bool | None = None,
     ) -> sparse.csr_matrix:
-        """Build and return the CLASP graph for an AnnData object."""
+        """Build and return the CLASP affinity graph for an AnnData object."""
         rep_key = self.rep_key if rep_key is None else rep_key
         batch_key = self.batch_key if batch_key is None else batch_key
         n_neighbors = self.n_neighbors if n_neighbors is None else n_neighbors
@@ -569,19 +597,78 @@ class ClaspEstimator:
         method: str | None = None,
         n_components: int | None = None,
         random_state: int | None = None,
+        edge_weighting: str | None = None,
         **kwargs,
     ) -> np.ndarray:
-        """Embed a graph and return low-dimensional coordinates."""
-        method = self.embedding_method if method is None else method
-        n_components = self.embedding_components if n_components is None else n_components
-        random_state = self.random_state if random_state is None else random_state
-        return embed_graph(
-            graph,
-            method=method,
-            n_components=n_components,
-            random_state=random_state,
-            **kwargs,
-        )
+        """Embed a CLASP affinity graph with the configured graph embedder."""
+        if method is not None:
+            if self._embedder_explicit:
+                raise ValueError(
+                    "The configured embedder owns its settings; pass a ClaspGraphEmbedder "
+                    "object to select UMAP or spectral embedding."
+                )
+            legacy_embedder = ClaspGraphEmbedder(
+                method=method,
+                n_components=self.embedding_components if n_components is None else n_components,
+                random_state=self.random_state if random_state is None else random_state,
+                kwargs=kwargs,
+            )
+            return legacy_embedder.fit_graph(graph).embedding_
+        if self._embedder_explicit and (
+            n_components is not None or random_state is not None or kwargs
+        ):
+            raise ValueError(
+                "The configured embedder owns its settings; configure the embedder object "
+                "before passing it to ClaspEstimator."
+            )
+        backend = self.embedder
+        if n_components is not None or random_state is not None or kwargs:
+            backend = clone(backend)
+            if isinstance(backend, ClaspGraphEmbedder):
+                backend.set_params(
+                    n_components=self.embedding_components if n_components is None else n_components,
+                    random_state=self.random_state if random_state is None else random_state,
+                    kwargs={**(backend.kwargs or {}), **kwargs},
+                )
+            else:
+                params = dict(kwargs)
+                if n_components is not None:
+                    params["n_components"] = n_components
+                if random_state is not None:
+                    params["random_state"] = random_state
+                backend.set_params(**params)
+        graph_input = graph
+        active_edge_weighting = self.edge_weighting if edge_weighting is None else edge_weighting
+        if isinstance(backend, IteratedMinimumSpanningTreeEmbedder):
+            if active_edge_weighting == "binary":
+                raise ValueError(
+                    "IMSTE requires distance-ranked CLASP edges, but edge_weighting='binary' "
+                    "discards edge distances. Use edge_weighting='distance'."
+                )
+            if active_edge_weighting != "distance":
+                raise ValueError("edge_weighting must be 'distance' or 'binary'.")
+            graph_input = sparse.csr_matrix(graph, copy=True).astype(np.float64)
+            values = graph_input.data
+            if (
+                not np.isfinite(values).all()
+                or np.any(values <= 0)
+                or np.any(values > 1.0 + 1e-6)
+            ):
+                raise ValueError(
+                    "IMSTE expects the positive CLASP affinity graph produced with "
+                    "edge_weighting='distance'."
+                )
+            # CLASP stores monotone inverse-distance affinities. IMSTE expects
+            # distances, where smaller values indicate closer edges.
+            graph_input.data = 1.0 / values - 1.0
+
+        fitted = backend.fit_graph(graph_input)
+        if fitted is not None:
+            self.embedder = fitted
+        embedding = np.asarray(self.embedder.embedding_)
+        if embedding.ndim != 2 or embedding.shape[0] != graph.shape[0]:
+            raise ValueError("embedder.fit_graph() must produce embedding_ with one row per graph node.")
+        return embedding
 
     def embed(
         self,
@@ -626,11 +713,13 @@ class ClaspEstimator:
             neighbor_mode=neighbor_mode,
             symmetrize=symmetrize,
         )
+        effective_edge_weighting = self.edge_weighting if edge_weighting is None else edge_weighting
         return self.graph_to_embeddings(
             graph,
             method=embedding_method,
             n_components=embedding_components,
             random_state=embedding_random_state,
+            edge_weighting=effective_edge_weighting,
             **embedding_kwargs,
         )
 
@@ -648,17 +737,12 @@ class ClaspEstimator:
                 batch_key=self.batch_key,
                 label_key=self.label_key,
                 random_state=params.random_state,
+                embedder=clone(self.embedder),
                 **trial_estimator_params,
             )
             try:
                 trial = trial_estimator.preprocess(adata, **trial_preprocess)
-                embedding_kwargs = {
-                    "embedding_method": params.embedding_method,
-                    "embedding_random_state": params.random_state,
-                }
-                if params.embedding_epochs is not None and params.embedding_method in {"auto", "umap"}:
-                    embedding_kwargs["n_epochs"] = params.embedding_epochs
-                trial.obsm["X_clasp"] = trial_estimator.embed(trial, **trial_graph, **embedding_kwargs)
+                trial.obsm["X_clasp"] = trial_estimator.embed(trial, **trial_graph)
                 scores = score_embedding(
                     trial,
                     embedding_key="X_clasp",

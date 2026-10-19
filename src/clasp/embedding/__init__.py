@@ -1,3 +1,3 @@
-from clasp.embedding.graph import embed_graph
+from clasp.embedding.graph import ClaspGraphEmbedder, embed_graph
 
-__all__ = ["embed_graph"]
+__all__ = ["ClaspGraphEmbedder", "embed_graph"]

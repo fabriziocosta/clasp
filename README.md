@@ -9,10 +9,17 @@ The required interface is an in-memory `AnnData` object or a `.h5ad` file.
 ## Install
 
 ```bash
-pip install -e ".[dev,umap]"
+pip install -e ".[dev]"
 ```
 
-UMAP is optional. If `umap-learn` is not installed, `embed_graph(method="auto")` falls back to spectral embedding from scikit-learn.
+IMSTE is installed as a required dependency from its GitHub repository. For development against local checkouts, install IMSTE editable first, then install CLASP:
+
+```bash
+pip install -e ".[dev,umap]"
+pip install -e "/path/to/IteratedMinimumSpanningTree" --no-deps
+```
+
+`ClaspEstimator` uses IMSTE by default. UMAP and spectral embedding remain available through `ClaspGraphEmbedder` (UMAP requires the optional `umap-learn` dependency); the older `embedding_method=` argument remains as a deprecated compatibility shortcut.
 
 ## Documentation
 
@@ -78,6 +85,46 @@ estimator.plot(adata, embedding_key="X_clasp")
 estimator.save(adata, "clasp_embedded.h5ad")
 ```
 
+`data_to_graph` returns a CLASP affinity graph. The estimator converts its distance-weighted affinities back to distances when the configured embedder is IMSTE. IMSTE requires `edge_weighting="distance"`; binary edges do not retain the distance ranking it uses to build spanning trees.
+
+Configure IMSTE directly when you want to tune its optimizer and tree settings:
+
+```python
+from imste import IteratedMinimumSpanningTreeEmbedder
+from clasp import ClaspEstimator
+
+imste = IteratedMinimumSpanningTreeEmbedder(
+    n_msts=15,
+    n_epochs=300,
+    n_components=2,
+    random_state=42,
+)
+estimator = ClaspEstimator(embedder=imste, batch_key="batch", label_key="label")
+```
+
+To select a legacy graph embedder explicitly, pass `ClaspGraphEmbedder(method="umap")` or `ClaspGraphEmbedder(method="spectral")` as `embedder=`.
+
+Build a directed label-neighbor graph from any sample-by-feature matrix, including 2D embeddings or higher-dimensional representations:
+
+```python
+from clasp import LabelNeighborGraph
+
+label_graph = LabelNeighborGraph(k=30).fit(X, adata.obs["cell_type"])
+label_graph.plot()
+```
+
+To share node positions between graphs, compute label centroids in a 2D embedding and export them. A graph fitted on another representation can import the same positions before plotting:
+
+```python
+umap_graph = LabelNeighborGraph(k=30).fit(umap_2d, labels)
+umap_graph.set_positions_from_embedding(umap_2d)
+umap_graph.export_positions("label_positions.json")
+
+imste_graph = LabelNeighborGraph(k=30).fit(imste_data, labels)
+imste_graph.import_positions("label_positions.json")
+imste_graph.plot()
+```
+
 `estimator.plot` uses a viridis palette for batches and a categorical `tab20` palette for labels by default. It shuffles the draw order reproducibly so ordered labels or batches do not hide mixing in crowded regions.
 Pass `filename="figures/my_embedding"` to also save the displayed plot as a high-resolution PNG, or provide an explicit suffix such as `.pdf` when vector output is smaller. Omitting `filename` keeps the default display-only behavior.
 
@@ -125,7 +172,7 @@ Core options:
 - `--rep-key`: input representation in `adata.obsm`; default is `X_pca`.
 - `--embedding-key`: output embedding key; default is `X_clasp`.
 - `--random-state`: seed for reproducible preprocessing and embedding.
-- `--embedding-method`: graph embedding backend, such as `auto`, `umap`, or `spectral`.
+- `--embedding-method`: deprecated legacy backend selector (`auto`, `umap`, or `spectral`); omitted uses IMSTE.
 - `--embedding-components`: number of output embedding dimensions.
 
 Preprocessing overrides:

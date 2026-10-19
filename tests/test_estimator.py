@@ -9,6 +9,7 @@ from scipy import sparse
 
 from clasp import (
     available_presets,
+    ClaspGraphEmbedder,
     ClaspEstimator,
     EstimatorTuneParams,
     GraphTuneParams,
@@ -16,6 +17,7 @@ from clasp import (
     PreprocessTuneParams,
     TuneParams,
 )
+from imste import IteratedMinimumSpanningTreeEmbedder
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -206,6 +208,116 @@ def test_estimator_graph_and_embedding_methods(toy_adata):
     assert sparse.isspmatrix_csr(graph)
     assert graph.shape == (adata.n_obs, adata.n_obs)
     assert coords.shape == (adata.n_obs, 2)
+
+
+def test_estimator_defaults_to_imste_and_embeds_clasp_distance_graph(toy_adata):
+    estimator = ClaspEstimator(n_components=6)
+    estimator.embedder.set_params(n_msts=2, n_epochs=0)
+    adata = estimator.preprocess(toy_adata, n_top_genes=None)
+    graph = estimator.data_to_graph(
+        adata,
+        n_neighbors=2,
+        intra_fraction=1.0,
+        n_inter_edges=0,
+    )
+
+    assert isinstance(estimator.embedder, IteratedMinimumSpanningTreeEmbedder)
+    from scipy.sparse.csgraph import connected_components
+
+    assert connected_components(graph, directed=False, return_labels=False) > 1
+    coords = estimator.graph_to_embeddings(graph)
+
+    assert coords.shape == (adata.n_obs, 2)
+    assert np.isfinite(coords).all()
+    assert estimator.embedder.graph_input_ is True
+    assert estimator.embedder.embedding_.shape[0] == adata.n_obs
+
+
+def test_estimator_uses_supplied_embedder_without_overriding_its_configuration(toy_adata):
+    configured = IteratedMinimumSpanningTreeEmbedder(
+        n_msts=3, n_epochs=0, n_components=3, random_state=31
+    )
+    estimator = ClaspEstimator(embedder=configured, embedding_components=2, random_state=0)
+    adata = estimator.preprocess(toy_adata, n_top_genes=None)
+    graph = estimator.data_to_graph(adata, n_neighbors=4)
+
+    coords = estimator.graph_to_embeddings(graph)
+
+    assert estimator.embedder is configured
+    assert configured.n_msts == 3
+    assert configured.n_components == 3
+    assert configured.random_state == 31
+    assert coords.shape == (adata.n_obs, 3)
+    np.testing.assert_array_equal(coords, configured.embedding_)
+
+
+def test_estimator_accepts_legacy_graph_embedder_object(toy_adata):
+    backend = ClaspGraphEmbedder(method="spectral", n_components=3, random_state=5)
+    estimator = ClaspEstimator(embedder=backend, n_components=6)
+    adata = estimator.preprocess(toy_adata, n_top_genes=None)
+    graph = estimator.data_to_graph(adata)
+
+    coords = estimator.graph_to_embeddings(graph)
+
+    assert backend.embedding_.shape == (adata.n_obs, 3)
+    assert coords.shape == (adata.n_obs, 3)
+
+
+def test_estimator_rejects_both_embedder_and_legacy_method():
+    with pytest.raises(ValueError, match="either embedder= or embedding_method="):
+        ClaspEstimator(embedder=ClaspGraphEmbedder(), embedding_method="spectral")
+
+
+def test_tuning_clones_and_preserves_configured_embedder(monkeypatch, toy_adata):
+    import clasp.optimization as optimization
+    import clasp.metrics
+
+    configured = IteratedMinimumSpanningTreeEmbedder(
+        n_msts=4, n_epochs=0, n_components=3, random_state=37
+    )
+    estimator = ClaspEstimator(embedder=configured)
+    seen_embedders = []
+
+    def fake_embed(self, adata, **kwargs):
+        seen_embedders.append(self.embedder)
+        adata.obsm["X_clasp"] = np.zeros((adata.n_obs, 3), dtype=float)
+        return adata.obsm["X_clasp"]
+
+    def fake_score(*args, **kwargs):
+        return pd.DataFrame(
+            [{"knn_label_agreement": 0.5, "batch_mixing": 0.5, "graph_density": 0.5}]
+        )
+
+    def fake_latent_bayesopt(objective_fn, search_space, **kwargs):
+        score = objective_fn({})
+        return {
+            "best_params": {},
+            "best_score": score,
+            "history": pd.DataFrame([{"score": score}]),
+            "latent_points": np.zeros((1, 1)),
+            "observed_points": np.zeros((1, 1)),
+            "observed_scores": np.array([score]),
+            "models": {},
+        }
+
+    monkeypatch.setattr(ClaspEstimator, "embed", fake_embed)
+    monkeypatch.setattr(clasp.metrics, "score_embedding", fake_score)
+    monkeypatch.setattr(optimization, "latent_bayesopt", fake_latent_bayesopt)
+    params = TuneParams(
+        preprocess=PreprocessTuneParams(
+            base={"n_top_genes": None, "min_gene_counts": 0, "normalize": False}
+        ),
+        estimator=EstimatorTuneParams(base={"n_components": 4}),
+        graph=GraphTuneParams(base={"n_neighbors": 3}),
+        pca_bo=LatentBOTuneParams(n_initial=1, n_iterations=0, embedding_model="pca"),
+        run_gplvm_refinement=False,
+    )
+
+    estimator.tune(toy_adata, params)
+
+    assert len(seen_embedders) == 1
+    assert seen_embedders[0] is not configured
+    assert seen_embedders[0].get_params() == configured.get_params()
 
 
 def test_estimator_accepts_balanced_preset_by_name():

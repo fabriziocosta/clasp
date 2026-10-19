@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     embed.add_argument("--embedding-key", default="X_clasp", help="Output embedding key in adata.obsm.")
     embed.add_argument("--figure", type=Path, default=None, help="Optional output figure path.")
     embed.add_argument("--random-state", type=int, default=0, help="Random seed for preprocessing and embedding.")
-    embed.add_argument("--embedding-method", default="auto", help="Graph embedding method: auto, umap, spectral, or a supported backend.")
+    embed.add_argument("--embedding-method", default=None, help="Deprecated legacy graph embedder: auto, umap, or spectral. Defaults to IMSTE.")
     embed.add_argument("--embedding-components", type=int, default=2, help="Number of output embedding dimensions.")
 
     preprocess = embed.add_argument_group("preprocessing")

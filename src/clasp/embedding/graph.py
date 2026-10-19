@@ -7,6 +7,7 @@ import warnings
 
 import numpy as np
 from scipy import sparse
+from sklearn.base import BaseEstimator
 from sklearn.manifold import SpectralEmbedding
 
 
@@ -49,7 +50,7 @@ def embed_graph(
     random_state: int = 0,
     **kwargs,
 ) -> np.ndarray:
-    """Embed a graph into low dimensions using UMAP when available, else spectral embedding."""
+    """Embed a CLASP affinity graph using UMAP or spectral embedding."""
     if graph.shape[0] != graph.shape[1]:
         raise ValueError("graph must be square.")
     if n_components < 1:
@@ -91,3 +92,36 @@ def embed_graph(
         ).fit_transform(graph)
 
     raise ValueError("method must be one of: 'auto', 'umap', 'spectral'.")
+
+
+class ClaspGraphEmbedder(BaseEstimator):
+    """Scikit-learn-style adapter for CLASP's legacy graph embedding methods.
+
+    Pass an instance to ``ClaspEstimator(embedder=...)`` to use UMAP,
+    spectral embedding, or the automatic UMAP/spectral fallback instead of
+    the default IMSTE embedder.
+    """
+
+    def __init__(
+        self,
+        method: str = "auto",
+        n_components: int = 2,
+        random_state: int = 0,
+        kwargs: dict | None = None,
+    ) -> None:
+        self.method = method
+        self.n_components = n_components
+        self.random_state = random_state
+        self.kwargs = kwargs
+
+    def fit_graph(self, distance_graph: sparse.spmatrix) -> "ClaspGraphEmbedder":
+        """Fit coordinates directly from a CLASP affinity graph."""
+        self.embedding_ = embed_graph(
+            distance_graph,
+            method=self.method,
+            n_components=self.n_components,
+            random_state=self.random_state,
+            **(self.kwargs or {}),
+        )
+        self.n_samples_fit_ = self.embedding_.shape[0]
+        return self

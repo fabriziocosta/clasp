@@ -12,11 +12,13 @@ import numpy as np
 import pandas as pd
 from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgba
+from matplotlib.lines import Line2D
 from matplotlib.patches import Ellipse, Patch, PathPatch
 from matplotlib.path import Path as MplPath
 from scipy import sparse
 from scipy import ndimage
-from scipy.spatial import ConvexHull, QhullError
+from scipy.spatial import ConvexHull, QhullError, cKDTree
+from scipy.stats import gaussian_kde
 from sklearn.manifold import trustworthiness
 from sklearn.cluster import KMeans
 from sklearn.metrics import (
@@ -39,18 +41,23 @@ def combine_feature_blocks(
     partition_test: np.ndarray,
     *,
     normalize_blocks: bool = True,
+    alpha: float = 0.5,
 ) -> tuple[np.ndarray, dict[str, float]]:
-    """Combine original and partition features, optionally balancing block norms.
+    """Combine original and partition features with configurable block weights.
 
-    When enabled, each block is scaled so its mean squared row norm on the
-    training data is one. The same training-derived scale is applied to test
-    rows, giving both blocks equal average contribution without fitting any
-    scale on the test data.
+    When normalization is enabled, each block is scaled to unit root mean
+    squared row norm on the training data before applying weights ``alpha``
+    and ``1 - alpha``.
+    The same training-derived scales are applied to test rows, without fitting
+    any scale on the test data.
     """
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError("alpha must be between 0 and 1.")
     blocks = {
         "original": (np.asarray(original_train), np.asarray(original_test)),
         "partition": (np.asarray(partition_train), np.asarray(partition_test)),
     }
+    block_weights = {"original": alpha, "partition": 1.0 - alpha}
     scales: dict[str, float] = {}
     scaled_test_blocks = []
     for name, (train_block, test_block) in blocks.items():
@@ -60,12 +67,217 @@ def combine_feature_blocks(
             raise ValueError(f"Train and test {name} feature widths must match.")
         if normalize_blocks:
             mean_squared_norm = float(np.mean(np.sum(train_block**2, axis=1)))
-            scale = 1.0 / np.sqrt(mean_squared_norm) if mean_squared_norm > 0 else 1.0
+            rms_norm = np.sqrt(mean_squared_norm)
+            norm_scale = 1.0 / rms_norm if rms_norm > 0 else 1.0
         else:
-            scale = 1.0
+            norm_scale = 1.0
+        scale = norm_scale * block_weights[name]
         scales[name] = scale
         scaled_test_blocks.append(test_block * scale)
     return np.hstack(scaled_test_blocks), scales
+
+
+def plot_density_parent_tree(
+    embedding: np.ndarray,
+    obs: pd.DataFrame,
+    *,
+    label_key: str,
+    ax=None,
+    point_size: float = 8,
+    point_alpha: float = 0.7,
+    edge_alpha: float = 0.65,
+    cross_label_edge_alpha: float = 0.25,
+    edge_alpha_exponent: float = 1.5,
+    linewidth: float = 0.7,
+    k: int = 1,
+    edge_length_std_threshold: float = 2.0,
+    legend_position: str = "bottom",
+    label_colors: dict[str, object] | None = None,
+):
+    """Plot a KDE density-parent graph over the labeled 2D embedding.
+
+    Each point connects to its ``k`` nearest points with higher KDE density,
+    or all such points when fewer than ``k`` exist. Equal-density points are
+    ordered by row index to ensure every non-root point has a parent. Edge
+    color is the mean of its endpoint label colors; opacity decreases as
+    ``edge_alpha / link_rank**edge_alpha_exponent`` for each point's ordered
+    parent links.
+    """
+    coordinates = np.asarray(embedding, dtype=np.float64)
+    if coordinates.ndim != 2 or coordinates.shape[1] != 2:
+        raise ValueError("embedding must be a two-dimensional coordinate array.")
+    if len(obs) != len(coordinates):
+        raise ValueError("obs rows must match the embedding rows.")
+    if label_key not in obs:
+        raise KeyError(f"Label column {label_key!r} is not present in obs.")
+    if len(coordinates) < 2 or not np.isfinite(coordinates).all():
+        raise ValueError("embedding must contain at least two finite coordinates.")
+    if legend_position not in {"inside", "right", "bottom"}:
+        raise ValueError("legend_position must be 'inside', 'right', or 'bottom'.")
+    if (
+        not np.isfinite(edge_length_std_threshold)
+        or edge_length_std_threshold < 0
+    ):
+        raise ValueError("edge_length_std_threshold must be finite and non-negative.")
+    if not np.isfinite(edge_alpha_exponent) or edge_alpha_exponent < 0:
+        raise ValueError("edge_alpha_exponent must be finite and non-negative.")
+    if (
+        not np.isfinite(cross_label_edge_alpha)
+        or not 0.0 <= cross_label_edge_alpha <= 1.0
+    ):
+        raise ValueError("cross_label_edge_alpha must be between 0 and 1.")
+    if isinstance(k, (bool, np.bool_)) or not isinstance(k, (int, np.integer)) or k < 1:
+        raise ValueError("k must be a positive integer.")
+    k = min(int(k), len(coordinates) - 1)
+
+    density = gaussian_kde(coordinates.T)(coordinates.T)
+    density_order = np.lexsort((np.arange(len(coordinates)), density))
+    density_rank = np.empty(len(coordinates), dtype=np.intp)
+    density_rank[density_order] = np.arange(len(coordinates))
+
+    parents = np.full((len(coordinates), k), -1, dtype=np.intp)
+    unresolved = density_order[:-1].copy()
+    search_tree = cKDTree(coordinates)
+    neighbor_count = min(max(2, k + 1), len(coordinates))
+    while unresolved.size:
+        _, neighbors = search_tree.query(
+            coordinates[unresolved], k=neighbor_count, workers=-1
+        )
+        if neighbor_count == 1:
+            neighbors = neighbors[:, None]
+        higher_density = density_rank[neighbors] > density_rank[unresolved, None]
+        enough_parents = higher_density.sum(axis=1) >= k
+        all_neighbors_seen = neighbor_count == len(coordinates)
+        resolved_mask = enough_parents | all_neighbors_seen
+        if np.any(resolved_mask):
+            resolved_neighbors = neighbors[resolved_mask]
+            resolved_higher_density = higher_density[resolved_mask]
+            for row_index, point_index in enumerate(unresolved[resolved_mask]):
+                higher_neighbors = resolved_neighbors[row_index][
+                    resolved_higher_density[row_index]
+                ]
+                parents[point_index, :min(k, len(higher_neighbors))] = higher_neighbors[:k]
+        unresolved = unresolved[~resolved_mask]
+        if unresolved.size:
+            neighbor_count = min(2 * neighbor_count, len(coordinates))
+
+    labels = pd.Categorical(obs[label_key])
+    palette = plt.get_cmap("tab20", max(len(labels.categories), 1))
+    if label_colors is None:
+        point_colors = palette(
+            np.clip(labels.codes, 0, max(len(labels.categories) - 1, 0))
+        )
+        point_colors[labels.codes < 0] = (0.5, 0.5, 0.5, 1.0)
+    else:
+        missing_color = (0.5, 0.5, 0.5, 1.0)
+        point_colors = np.asarray([
+            label_colors.get(str(value), missing_color)
+            if not pd.isna(value) else missing_color
+            for value in obs[label_key]
+        ], dtype=float)
+    edge_mask = parents >= 0
+    child_grid, edge_rank_grid = np.indices(parents.shape)
+    child_indices = child_grid[edge_mask]
+    parent_indices = parents[edge_mask]
+    edge_ranks = edge_rank_grid[edge_mask] + 1
+    edge_lengths = np.linalg.norm(
+        coordinates[child_indices] - coordinates[parent_indices], axis=1
+    )
+    mean_edge_length = float(edge_lengths.mean())
+    std_edge_length = float(edge_lengths.std())
+    edge_length_cutoff = (
+        mean_edge_length + edge_length_std_threshold * std_edge_length
+    )
+    keep_edge = edge_lengths <= edge_length_cutoff
+    filtered_children = child_indices[keep_edge]
+    filtered_parents = parent_indices[keep_edge]
+    segments = np.stack(
+        (coordinates[filtered_children], coordinates[filtered_parents]), axis=1
+    )
+    edge_colors = (
+        point_colors[filtered_children] + point_colors[filtered_parents]
+    ) / 2
+    filtered_edge_ranks = edge_ranks[keep_edge]
+    cross_label_edge = (
+        labels.codes[filtered_children] != labels.codes[filtered_parents]
+    )
+    base_edge_alphas = np.where(
+        cross_label_edge, cross_label_edge_alpha, edge_alpha
+    )
+    edge_alphas = base_edge_alphas / filtered_edge_ranks**edge_alpha_exponent
+    edge_colors[:, 3] *= edge_alphas
+    omitted_edges = int((~keep_edge).sum())
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(10, 8))
+    ax.add_collection(
+        LineCollection(
+            segments,
+            colors=edge_colors,
+            linewidths=linewidth,
+            zorder=1,
+        )
+    )
+    ax.scatter(
+        coordinates[:, 0], coordinates[:, 1], c=point_colors,
+        s=point_size, alpha=point_alpha, linewidths=0, zorder=2,
+    )
+    ax.set_title(
+        f"KDE density-parent graph (k={k}); mean edge {mean_edge_length:.3g}; "
+        f"{omitted_edges} edges omitted (>{edge_length_std_threshold:g} SD)"
+    )
+    ax.set_xlabel("IMSTE 1")
+    ax.set_ylabel("IMSTE 2")
+    ax.set_aspect("equal", adjustable="box")
+
+    handles = [
+        Line2D(
+            [], [], marker="o", linestyle="none",
+            color=(label_colors[str(value)] if label_colors is not None else palette(index)),
+            markersize=6, label=str(value)
+        )
+        for index, value in enumerate(labels.categories)
+    ]
+    if np.any(labels.codes < 0):
+        handles.append(
+            Line2D(
+                [], [], marker="o", linestyle="none", color="0.5",
+                markersize=6, label="(missing)"
+            )
+        )
+    if legend_position == "right":
+        legend_options = {
+            "bbox_to_anchor": (1.02, 1), "loc": "upper left", "frameon": False
+        }
+    elif legend_position == "bottom":
+        legend_options = {
+            "bbox_to_anchor": (0.5, -0.16),
+            "loc": "upper center",
+            "ncol": min(7, max(1, len(labels.categories))),
+            "frameon": False,
+        }
+    else:
+        legend_options = {
+            "loc": "upper right", "frameon": True, "framealpha": 0.8
+        }
+    ax.legend(
+        handles,
+        [handle.get_label() for handle in handles],
+        title=label_key,
+        **legend_options,
+    )
+    return ax, {
+        "density": density,
+        "parent_indices": parents,
+        "edge_lengths": edge_lengths,
+        "edge_ranks": edge_ranks,
+        "edge_alphas": edge_alphas,
+        "cross_label_edge": cross_label_edge,
+        "mean_edge_length": mean_edge_length,
+        "std_edge_length": std_edge_length,
+        "edge_length_cutoff": edge_length_cutoff,
+        "omitted_edges": omitted_edges,
+    }
 
 
 def _repository_root() -> Path:
@@ -96,10 +308,18 @@ def available_datasets() -> list[Path]:
 def available_obs_columns(path: str | Path) -> list[str]:
     """List metadata columns in an H5AD file without loading their values."""
     with h5py.File(path, "r") as h5:
-        if "obs" not in h5 or not isinstance(h5["obs"], h5py.Group):
+        if "obs" not in h5:
+            return []
+        obs_node = h5["obs"]
+        if isinstance(obs_node, h5py.Dataset):
+            return [
+                key for key in (obs_node.dtype.names or ())
+                if not key.startswith("__")
+            ]
+        if not isinstance(obs_node, h5py.Group):
             return []
         columns = []
-        for key, node in h5["obs"].items():
+        for key, node in obs_node.items():
             if key.startswith("__"):
                 continue
             if isinstance(node, h5py.Dataset) or (
@@ -142,6 +362,40 @@ def _decode_h5_strings(values: np.ndarray) -> np.ndarray:
     return values
 
 
+def _h5_obs_column_keys(obs_node: h5py.Group | h5py.Dataset) -> set[str]:
+    if isinstance(obs_node, h5py.Dataset):
+        return set(obs_node.dtype.names or ())
+    if isinstance(obs_node, h5py.Group):
+        return set(obs_node.keys())
+    return set()
+
+
+def _h5_dataframe_index_key(obs_node: h5py.Group | h5py.Dataset) -> str | None:
+    """Resolve the obs index column from either H5AD dataframe storage layout."""
+    available_keys = _h5_obs_column_keys(obs_node)
+    value = obs_node.attrs.get("_index", "_index")
+    if isinstance(value, np.ndarray):
+        if value.size != 1:
+            value = None
+        else:
+            value = value.reshape(-1)[0]
+    if isinstance(value, np.void):
+        names = value.dtype.names or ()
+        if len(names) == 1:
+            value = value[names[0]]
+        else:
+            value = None
+    if isinstance(value, (bytes, np.bytes_)):
+        value = value.decode("utf-8")
+    if isinstance(value, (str, np.str_)):
+        key = str(value)
+        if key in available_keys:
+            return key
+    for key in ("_index", "index"):
+        if key in available_keys:
+            return key
+    return None
+
 def _read_h5ad_matrix(node: h5py.Dataset | h5py.Group, row_indices: np.ndarray) -> np.ndarray:
     """Read selected rows from a dense H5AD matrix or CSR/CSC matrix group."""
     if isinstance(node, h5py.Dataset):
@@ -166,8 +420,18 @@ def _read_h5ad_matrix(node: h5py.Dataset | h5py.Group, row_indices: np.ndarray) 
     return matrix[row_indices].toarray()
 
 
-def _read_h5ad_obs_column(node: h5py.Dataset | h5py.Group, row_indices: np.ndarray):
+def _read_h5ad_obs_column(
+    obs_node: h5py.Group | h5py.Dataset,
+    key: str,
+    row_indices: np.ndarray,
+):
     """Read a regular or categorical AnnData obs column."""
+    if isinstance(obs_node, h5py.Dataset):
+        if obs_node.dtype.names and key in obs_node.dtype.names:
+            return _decode_h5_strings(obs_node.fields(key)[row_indices])
+        raise KeyError(f"Obs column {key!r} is not present in the structured obs dataset.")
+
+    node = obs_node[key]
     if isinstance(node, h5py.Group) and {"codes", "categories"}.issubset(node.keys()):
         categories = _decode_h5_strings(node["categories"][:])
         codes = node["codes"][row_indices].astype(np.int64, copy=False)
@@ -220,15 +484,15 @@ def load_dataset(
 
         obs_group = h5["obs"]
         obs_columns = {
-            key: _read_h5ad_obs_column(obs_group[key], row_indices)
+            key: _read_h5ad_obs_column(obs_group, key, row_indices)
             for key in obs_keys
-            if key in obs_group
+            if key in _h5_obs_column_keys(obs_group)
         }
-        obs_index_key = obs_group.attrs.get("_index", "_index")
-        if isinstance(obs_index_key, bytes):
-            obs_index_key = obs_index_key.decode("utf-8")
-        if obs_index_key in obs_group:
-            obs_names = _decode_h5_strings(obs_group[obs_index_key][row_indices]).astype(str)
+        obs_index_key = _h5_dataframe_index_key(obs_group)
+        if obs_index_key is not None:
+            obs_names = _decode_h5_strings(
+                _read_h5ad_obs_column(obs_group, obs_index_key, row_indices)
+            ).astype(str)
         else:
             obs_names = row_indices.astype(str)
 
@@ -286,9 +550,9 @@ def load_dataset_with_train_test(
         obs_group = h5["obs"]
         full_obs = pd.DataFrame(
             {
-                key: _read_h5ad_obs_column(obs_group[key], all_rows)
+                key: _read_h5ad_obs_column(obs_group, key, all_rows)
                 for key in obs_keys
-                if key in obs_group
+                if key in _h5_obs_column_keys(obs_group)
             }
         )
         if label_key is None:
@@ -338,21 +602,21 @@ def load_dataset_with_train_test(
         else:
             test_rows = reserved_test_rows.copy()
 
-        obs_index_key = obs_group.attrs.get("_index", "_index")
-        if isinstance(obs_index_key, bytes):
-            obs_index_key = obs_index_key.decode("utf-8")
+        obs_index_key = _h5_dataframe_index_key(obs_group)
 
         def read_rows(rows):
             sorted_rows = np.sort(rows)
             reorder = np.searchsorted(sorted_rows, rows)
             matrix = _read_h5ad_matrix(matrix_node, sorted_rows)[reorder]
             columns = {
-                key: _read_h5ad_obs_column(obs_group[key], sorted_rows)
+                key: _read_h5ad_obs_column(obs_group, key, sorted_rows)
                 for key in obs_keys
-                if key in obs_group
+                if key in _h5_obs_column_keys(obs_group)
             }
-            if obs_index_key in obs_group:
-                names = _decode_h5_strings(obs_group[obs_index_key][sorted_rows]).astype(str)
+            if obs_index_key is not None:
+                names = _decode_h5_strings(
+                    _read_h5ad_obs_column(obs_group, obs_index_key, sorted_rows)
+                ).astype(str)
             else:
                 names = sorted_rows.astype(str)
             observations = pd.DataFrame(columns, index=names).iloc[reorder].copy()
@@ -382,12 +646,23 @@ def load_embedder_class():
     try:
         from imste import IteratedMinimumSpanningTreeEmbedder
     except ImportError:
-        imste_root = Path(
-            os.environ.get("IMSTE_REPO", Path.home() / "Code" / "mst_embedding")
+        configured_root = os.environ.get("IMSTE_REPO")
+        candidate_roots = (
+            [Path(configured_root)]
+            if configured_root
+            else [
+                Path.home() / "Code" / "IteratedMinimumSpanningTree",
+                Path.home() / "Code" / "mst_embedding",
+            ]
         )
-        if not (imste_root / "imste").is_dir():
+        imste_root = next(
+            (root for root in candidate_roots if (root / "imste").is_dir()),
+            None,
+        )
+        if imste_root is None:
             raise ImportError(
-                "Install imste or set IMSTE_REPO to the mst_embedding source directory."
+                "Install imste or set IMSTE_REPO to the IMSTE repository root "
+                "(the directory containing the imste package)."
             )
         sys.path.insert(0, str(imste_root))
         from imste import IteratedMinimumSpanningTreeEmbedder
@@ -553,6 +828,7 @@ def plot_embedding(
     point_alpha: float = 0.8,
     ax=None,
     legend_position: str | None = None,
+    label_colors: dict[str, object] | None = None,
 ):
     """Plot the embedding colored by available metadata columns."""
     color_keys = [key for key in color_keys if key in obs]
@@ -580,21 +856,50 @@ def plot_embedding(
 
     for ax, key in zip(axes.ravel(), color_keys):
         labels = pd.Categorical(obs[key])
-        points = ax.scatter(
-            embedding[:, 0],
-            embedding[:, 1],
-            c=labels.codes,
-            cmap="tab20",
-            s=point_size,
-            alpha=point_alpha,
-            linewidths=0,
-            zorder=3,
-        )
+        if label_colors is None:
+            points = ax.scatter(
+                embedding[:, 0],
+                embedding[:, 1],
+                c=labels.codes,
+                cmap="tab20",
+                s=point_size,
+                alpha=point_alpha,
+                linewidths=0,
+                zorder=3,
+            )
+            handles, _ = points.legend_elements(num=len(labels.categories))
+        else:
+            missing_color = (0.5, 0.5, 0.5, 1.0)
+            point_colors = [
+                label_colors.get(str(value), missing_color)
+                if not pd.isna(value) else missing_color
+                for value in obs[key]
+            ]
+            ax.scatter(
+                embedding[:, 0],
+                embedding[:, 1],
+                c=point_colors,
+                s=point_size,
+                alpha=point_alpha,
+                linewidths=0,
+                zorder=3,
+            )
+            handles = [
+                Line2D(
+                    [], [], marker="o", linestyle="none",
+                    color=label_colors[str(value)], markersize=6, label=str(value)
+                )
+                for value in labels.categories
+            ]
+            if obs[key].isna().any():
+                handles.append(Line2D(
+                    [], [], marker="o", linestyle="none", color=missing_color,
+                    markersize=6, label="(missing)"
+                ))
         ax.set_title(f"IMSTE colored by {key}")
         ax.set_xlabel("IMSTE 1")
         ax.set_ylabel("IMSTE 2")
         ax.set_aspect("equal", adjustable="box")
-        handles, _ = points.legend_elements(num=len(labels.categories))
         if legend_position == "right":
             legend_options = {
                 "bbox_to_anchor": (1.02, 1), "loc": "upper left", "frameon": False
@@ -612,7 +917,7 @@ def plot_embedding(
             }
         ax.legend(
             handles,
-            [str(value) for value in labels.categories],
+            [handle.get_label() for handle in handles],
             title=key,
             **legend_options,
         )

@@ -143,7 +143,24 @@ The estimator stores defaults for:
 - batch and label keys
 - graph parameters
 - PCA component count
-- embedding method and output dimension
+- the default IMSTE graph embedder and output dimension
+
+To set IMSTE's full parameter set, construct it and pass the configured
+object to the estimator. Its settings are used as supplied:
+
+```python
+from imste import IteratedMinimumSpanningTreeEmbedder
+
+estimator = ClaspEstimator(
+    embedder=IteratedMinimumSpanningTreeEmbedder(
+        n_msts=15, n_epochs=300, n_components=2, random_state=0
+    ),
+)
+```
+
+UMAP and spectral remain available via
+`ClaspEstimator(embedder=ClaspGraphEmbedder(method="umap"))` or
+`ClaspGraphEmbedder(method="spectral")`.
 
 ## Graph Construction
 
@@ -184,6 +201,8 @@ Options include:
 - `mutual_neighbors=True` to retain only mutual neighbor relations.
 - `edge_weighting="binary"` or `"distance"`.
 
+`data_to_graph` stores positive affinities. With `edge_weighting="distance"`, larger stored values mean closer edges; `ClaspEstimator` reverses this transform before passing the graph to IMSTE, which expects distances. IMSTE requires `edge_weighting="distance"` because binary weights discard the edge-distance ranking.
+
 ### Cross-Batch Edges
 
 For each pair of batches, CLASP computes pairwise distances in representation space, optionally applies CSLS and rank correction, then solves repeated linear assignment problems. The retained assignments define reliable cross-batch partners without allowing one cell to become a hub for many cells.
@@ -211,28 +230,33 @@ adata.uns["clasp"]["graph"]
 
 ## Embedding
 
-`graph_to_embeddings(...)` embeds the integrated graph:
+`graph_to_embeddings(...)` embeds the integrated graph with the default IMSTE
+backend. To configure IMSTE, pass a configured object when constructing the
+estimator:
 
 ```python
-embedding = estimator.graph_to_embeddings(graph, method="umap", n_components=2)
+from imste import IteratedMinimumSpanningTreeEmbedder
+
+estimator = ClaspEstimator(
+    embedder=IteratedMinimumSpanningTreeEmbedder(
+        n_msts=15, n_epochs=300, n_components=2, random_state=0
+    ),
+)
+embedding = estimator.graph_to_embeddings(graph)
 ```
 
-`embed(...)` combines graph construction and embedding:
+`embed(...)` combines graph construction and embedding. For UMAP or spectral
+embedding, pass a `ClaspGraphEmbedder` object instead:
 
 ```python
+from clasp import ClaspGraphEmbedder
+
+estimator = ClaspEstimator(embedder=ClaspGraphEmbedder(method="umap"))
 adata.obsm["X_clasp"] = estimator.embed(
     adata,
     **graph_params,
-    embedding_method="umap",
-    embedding_components=2,
 )
 ```
-
-Supported embedding methods are:
-
-- `auto`: use UMAP if installed, otherwise spectral embedding.
-- `umap`: convert graph weights to a precomputed distance matrix and run UMAP.
-- `spectral`: run sklearn spectral embedding on the graph affinity.
 
 Notebook optimization currently uses UMAP by default so the objective matches the visualization behavior.
 
