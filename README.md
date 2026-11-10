@@ -98,9 +98,17 @@ imste = IteratedMinimumSpanningTreeEmbedder(
     n_epochs=300,
     n_components=2,
     random_state=42,
+    pca_init=True,
+    pca_init_scale=0.1,
 )
 estimator = ClaspEstimator(embedder=imste, batch_key="batch", label_key="label")
 ```
+
+`pca_init` and `pca_init_scale` are set explicitly in CLASP's default IMSTE
+configuration. `ClaspEstimator.embed()` passes its input representation to
+IMSTE for PCA initialization while IMSTE still optimizes against the integrated
+CLASP graph. If you call `graph_to_embeddings()` directly, pass the matching
+feature matrix with `init_features=`.
 
 To select a legacy graph embedder explicitly, pass `ClaspGraphEmbedder(method="umap")` or `ClaspGraphEmbedder(method="spectral")` as `embedder=`.
 

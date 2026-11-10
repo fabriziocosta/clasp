@@ -334,6 +334,8 @@ class ClaspEstimator:
             self.embedder = IteratedMinimumSpanningTreeEmbedder(
                 n_components=embedding_components,
                 random_state=random_state,
+                pca_init=True,
+                pca_init_scale=0.1,
             )
 
     @property
@@ -598,10 +600,17 @@ class ClaspEstimator:
         n_components: int | None = None,
         random_state: int | None = None,
         edge_weighting: str | None = None,
+        init_features: object | None = None,
         **kwargs,
     ) -> np.ndarray:
-        """Embed a CLASP affinity graph with the configured graph embedder."""
+        """Embed a CLASP affinity graph with the configured graph embedder.
+
+        ``init_features`` supplies optional PCA initialization features to
+        IMSTE. It does not affect the graph used for embedding.
+        """
         if method is not None:
+            if init_features is not None:
+                raise ValueError("init_features is supported only by the IMSTE graph embedder.")
             if self._embedder_explicit:
                 raise ValueError(
                     "The configured embedder owns its settings; pass a ClaspGraphEmbedder "
@@ -661,8 +670,13 @@ class ClaspEstimator:
             # CLASP stores monotone inverse-distance affinities. IMSTE expects
             # distances, where smaller values indicate closer edges.
             graph_input.data = 1.0 / values - 1.0
+        elif init_features is not None:
+            raise ValueError("init_features is supported only by the IMSTE graph embedder.")
 
-        fitted = backend.fit_graph(graph_input)
+        if isinstance(backend, IteratedMinimumSpanningTreeEmbedder) and init_features is not None:
+            fitted = backend.fit_graph(graph_input, init_features=init_features)
+        else:
+            fitted = backend.fit_graph(graph_input)
         if fitted is not None:
             self.embedder = fitted
         embedding = np.asarray(self.embedder.embedding_)
@@ -692,6 +706,7 @@ class ClaspEstimator:
         embedding_method: str | None = None,
         embedding_components: int | None = None,
         embedding_random_state: int | None = None,
+        init_features: object | None = None,
         **embedding_kwargs,
     ) -> np.ndarray:
         """Build the graph from AnnData and return embedding vectors."""
@@ -714,13 +729,24 @@ class ClaspEstimator:
             symmetrize=symmetrize,
         )
         effective_edge_weighting = self.edge_weighting if edge_weighting is None else edge_weighting
+        embedding_options = dict(embedding_kwargs)
+        if (
+            embedding_method is None
+            and isinstance(self.embedder, IteratedMinimumSpanningTreeEmbedder)
+        ):
+            effective_rep_key = self.rep_key if rep_key is None else rep_key
+            if init_features is None:
+                init_features = adata.obsm[effective_rep_key]
+            embedding_options["init_features"] = init_features
+        elif init_features is not None:
+            raise ValueError("init_features is supported only by the IMSTE graph embedder.")
         return self.graph_to_embeddings(
             graph,
             method=embedding_method,
             n_components=embedding_components,
             random_state=embedding_random_state,
             edge_weighting=effective_edge_weighting,
-            **embedding_kwargs,
+            **embedding_options,
         )
 
     def tune(self, adata: ad.AnnData, params: TuneParams) -> TuneResult:

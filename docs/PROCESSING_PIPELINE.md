@@ -153,10 +153,19 @@ from imste import IteratedMinimumSpanningTreeEmbedder
 
 estimator = ClaspEstimator(
     embedder=IteratedMinimumSpanningTreeEmbedder(
-        n_msts=15, n_epochs=300, n_components=2, random_state=0
+        n_msts=15,
+        n_epochs=300,
+        n_components=2,
+        random_state=0,
+        pca_init=True,
+        pca_init_scale=0.1,
     ),
 )
 ```
+
+The default IMSTE configuration sets `pca_init=True` and `pca_init_scale=0.1`.
+`ClaspEstimator.embed()` passes the selected representation to IMSTE for PCA
+initialization while retaining the CLASP graph as the optimization objective.
 
 UMAP and spectral remain available via
 `ClaspEstimator(embedder=ClaspGraphEmbedder(method="umap"))` or
@@ -239,10 +248,18 @@ from imste import IteratedMinimumSpanningTreeEmbedder
 
 estimator = ClaspEstimator(
     embedder=IteratedMinimumSpanningTreeEmbedder(
-        n_msts=15, n_epochs=300, n_components=2, random_state=0
+        n_msts=15,
+        n_epochs=300,
+        n_components=2,
+        random_state=0,
+        pca_init=True,
+        pca_init_scale=0.1,
     ),
 )
-embedding = estimator.graph_to_embeddings(graph)
+embedding = estimator.graph_to_embeddings(
+    graph,
+    init_features=adata.obsm["X_pca"],
+)
 ```
 
 `embed(...)` combines graph construction and embedding. For UMAP or spectral
