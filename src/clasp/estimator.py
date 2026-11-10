@@ -335,7 +335,7 @@ class ClaspEstimator:
                 n_components=embedding_components,
                 random_state=random_state,
                 pca_init=True,
-                pca_init_scale=0.1,
+                pca_init_scaling="global",
             )
 
     @property

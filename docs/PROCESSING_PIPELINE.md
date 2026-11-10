@@ -158,12 +158,15 @@ estimator = ClaspEstimator(
         n_components=2,
         random_state=0,
         pca_init=True,
-        pca_init_scale=0.1,
+        pca_init_scaling="global",
     ),
 )
 ```
 
-The default IMSTE configuration sets `pca_init=True` and `pca_init_scale=0.1`.
+The default IMSTE configuration sets `pca_init=True` and
+`pca_init_scaling="global"`, which applies one shared scale so all PCA
+initialization coordinates fit into the `[-1, 1]` range while preserving their
+relative axis scales.
 `ClaspEstimator.embed()` passes the selected representation to IMSTE for PCA
 initialization while retaining the CLASP graph as the optimization objective.
 
@@ -253,7 +256,7 @@ estimator = ClaspEstimator(
         n_components=2,
         random_state=0,
         pca_init=True,
-        pca_init_scale=0.1,
+        pca_init_scaling="global",
     ),
 )
 embedding = estimator.graph_to_embeddings(
