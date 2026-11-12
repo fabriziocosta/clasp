@@ -390,6 +390,8 @@ class ClaspEstimator:
         hvg_flavor: str = "cell_ranger",
         hvg_batch_key: str | None = None,
         hvg_fallback: str = "variance",
+        scale: bool = False,
+        scale_max_value: float | None = None,
         create_artificial_batch: bool = False,
         artificial_batch_count: int = 3,
         label_candidates: tuple[str, ...] = (
@@ -407,7 +409,8 @@ class ClaspEstimator:
 
         Parameters control, in order: optional artificial batch/label setup,
         cell and gene filtering, expression normalization, HVG selection,
-        optional cell subsampling, copying behavior, and PCA creation.
+        optional cell subsampling, optional scaling, copying behavior, and PCA
+        creation.
         `label_candidates` is tried in order when `obs[self.label_key]` is
         absent. `hvg_fallback` controls Scanpy HVG failures and can be
         "variance" or "error".
@@ -513,6 +516,12 @@ class ClaspEstimator:
                 rng = np.random.default_rng(self.random_state)
                 indices = np.sort(rng.choice(result.n_obs, size=max_cells, replace=False))
             result = result[indices].copy()
+
+        if scale:
+            if sc is None:
+                raise ImportError("Feature scaling requires optional dependency `scanpy`.")
+            sc.pp.scale(result, max_value=scale_max_value)
+            changed_expression = True
 
         if changed_expression and self.rep_key in result.obsm:
             del result.obsm[self.rep_key]
